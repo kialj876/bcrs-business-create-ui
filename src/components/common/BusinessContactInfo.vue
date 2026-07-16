@@ -112,7 +112,7 @@
           sm="3"
           class="pr-4"
         >
-          <label class="title-label">{{ contactInformationLabel }}</label>
+          <label>{{ contactInformationLabel }}</label>
         </v-col>
 
         <v-col
