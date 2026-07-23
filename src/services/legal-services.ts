@@ -1,10 +1,11 @@
-import { AxiosInstance as axios } from '@/utils'
+import { AxiosInstance as axios, GetFeatureFlag } from '@/utils'
 import { AxiosResponse } from 'axios'
 import { StatusCodes } from 'http-status-codes'
-import { BusinessIF, DissolutionFilingIF, IncorporationFilingIF, NameRequestIF, OrgPersonIF, PresignedUrlIF,
-  ResolutionIF } from '@/interfaces'
-import { AuthorizedActions, FilingTypes, RoleTypes } from '@/enums'
+import { BusinessIF, DissolutionFilingIF, DocumentUploadIF, IncorporationFilingIF, NameRequestIF, OrgPersonIF,
+  PresignedUrlIF, ResolutionIF } from '@/interfaces'
+import { AuthorizedActions, DocumentTypes, FilingTypes, RoleTypes } from '@/enums'
 import { ShareStructureIF } from '@bcrs-shared-components/interfaces'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 /**
  * Class that provides integration with the Legal (aka Business) API.
@@ -321,6 +322,74 @@ export default class LegalServices {
       })
   }
 
+  /** Whether the DRS (Document Record Service) upload flow is enabled. */
+  static get isDrsUploadEnabled (): boolean {
+    const enabledFeatures: string[] = (GetFeatureFlag('enable-new-feature') || '').split(',')
+    return enabledFeatures.includes('drs-upload')
+  }
+
+  /**
+   * Whether the document key is a DRS key (eg, "CORP-DS0100001003")
+   * vs a legacy Minio key (a UUID).
+   * @param key the document key
+   */
+  private static isDrsDocumentKey (key: string): boolean {
+    return /^[A-Z]+-DS\d+$/i.test(key)
+  }
+
+  /**
+   * Uploads the specified document. When the DRS feature is enabled, this makes a single call
+   * to the Legal API client document endpoint (which stores the document in the Document Record
+   * Service). Otherwise it falls back to the legacy two-step Minio presigned-URL flow.
+   * @param file the file to upload (PDF)
+   * @param filingType the filing type (eg, FilingTypes.INCORPORATION_APPLICATION)
+   * @param entityType the entity type (eg, CorpTypeCd.COOP)
+   * @param documentType the document type (eg, DocumentTypes.COOP_RULES)
+   * @param keycloakGuid the user's Keycloak GUID (legacy flow only)
+   * @param businessIdentifier the business identifier or temp registration number, if available
+   * @param filingId the filing id, if available
+   * @returns a promise to return the document upload object (throws on error)
+   */
+  static async uploadDocument (
+    file: File,
+    filingType: FilingTypes,
+    entityType: CorpTypeCd,
+    documentType: DocumentTypes,
+    keycloakGuid: string,
+    businessIdentifier?: string,
+    filingId?: number
+  ): Promise<DocumentUploadIF> {
+    if (this.isDrsUploadEnabled) {
+      const url = `${this.businessApiUrl}documents/client/${filingType}/${entityType}/${documentType}`
+
+      const config = {
+        headers: { 'Content-Type': 'application/pdf' },
+        params: {
+          filename: file.name,
+          businessIdentifier: businessIdentifier || undefined,
+          filingId: filingId || undefined
+        }
+      }
+
+      return axios.post(url, file, config)
+        .then(response => {
+          const data = response?.data as DocumentUploadIF
+          if (!data?.key) {
+            throw new Error('Invalid API response')
+          }
+          return data
+        })
+    } else {
+      // legacy Minio flow
+      const psu = await this.getPresignedUrl(file.name)
+      const res = await this.uploadToUrl(psu.preSignedUrl, file, psu.key, keycloakGuid)
+      if (!res || res.status !== StatusCodes.OK) {
+        throw new Error('Invalid API response')
+      }
+      return { key: psu.key }
+    }
+  }
+
   /**
    * Gets a pre-signed URL for the specified filename.
    * @param filename the file name
@@ -367,20 +436,23 @@ export default class LegalServices {
   }
 
   /**
-   * Deletes a Minio document.
+   * Deletes a document (DRS or legacy Minio, depending on the key format).
    * @param documentKey the document key
    * @returns a promise to return the axios response or the error response
    */
   static async deleteDocument (documentKey: string): Promise<AxiosResponse> {
     if (!documentKey) throw new Error('Invalid parameters')
 
-    const url = `${this.businessApiUrl}documents/${documentKey}`
+    const url = this.isDrsDocumentKey(documentKey)
+      ? `${this.businessApiUrl}documents/client/${documentKey}`
+      : `${this.businessApiUrl}documents/${documentKey}`
 
     return axios.delete(url)
   }
 
   /**
-   * Downloads a Minio document and prompts browser to open/save it.
+   * Downloads a document (DRS or legacy Minio, depending on the key format)
+   * and prompts browser to open/save it.
    * @param documentKey the document key
    * @param documentName the document filename
    * @returns a promise to return the axios response or the error response
@@ -388,7 +460,9 @@ export default class LegalServices {
   static async downloadDocument (documentKey: string, documentName: string): Promise<AxiosResponse> {
     if (!documentKey || !documentName) throw new Error('Invalid parameters')
 
-    const url = `${this.businessApiUrl}documents/${documentKey}`
+    const url = this.isDrsDocumentKey(documentKey)
+      ? `${this.businessApiUrl}documents/client/${documentKey}`
+      : `${this.businessApiUrl}documents/${documentKey}`
 
     // add/override headers
     const config = {

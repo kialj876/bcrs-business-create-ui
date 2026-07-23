@@ -64,6 +64,7 @@ export * from './store-interfaces/state-interface'
 // Utils interfaces
 export * from './utils-interfaces/address-schema-interface'
 export * from './utils-interfaces/confirm-dialog-type'
+export * from './utils-interfaces/document-upload-interface'
 export * from './utils-interfaces/form-field-type'
 export * from './utils-interfaces/key-value-interface'
 export * from './utils-interfaces/pdf-info-interface'

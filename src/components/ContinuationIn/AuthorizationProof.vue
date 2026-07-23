@@ -160,11 +160,11 @@
 <script lang="ts">
 import { Component, Emit, Mixins, Watch } from 'vue-property-decorator'
 import { Action, Getter } from 'pinia-class'
-import { StatusCodes } from 'http-status-codes'
 import { useStore } from '@/store/store'
 import { DocumentMixin } from '@/mixins'
-import { AuthorizationProofIF, ExistingBusinessInfoIF, PresignedUrlIF } from '@/interfaces'
-import { FilingStatus } from '@/enums'
+import { AuthorizationProofIF, DocumentUploadIF, ExistingBusinessInfoIF } from '@/interfaces'
+import { DocumentTypes, FilingStatus, FilingTypes } from '@/enums'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 import FileUploadPreview from '@/components/common/FileUploadPreview.vue'
 import AutoResize from 'vue-auto-resize'
 import MessageBox from '@/components/common/MessageBox.vue'
@@ -186,10 +186,13 @@ export default class AuthorizationProof extends Mixins(DocumentMixin) {
   }
 
   @Getter(useStore) getContinuationInAuthorizationProof!: AuthorizationProofIF
+  @Getter(useStore) getEntityType!: CorpTypeCd
   @Getter(useStore) getExistingBusinessInfo!: ExistingBusinessInfoIF
+  @Getter(useStore) getFilingId!: number
   @Getter(useStore) getFilingStatus!: FilingStatus
   @Getter(useStore) getKeycloakGuid!: string
   @Getter(useStore) getShowErrors!: boolean
+  @Getter(useStore) getTempId!: string
 
   @Action(useStore) setContinuationAuthorization!: (x: AuthorizationProofIF) => void
 
@@ -278,13 +281,12 @@ export default class AuthorizationProof extends Mixins(DocumentMixin) {
         return // don't add to array
       }
 
-      // try to upload to Minio
-      let psu: PresignedUrlIF
+      // try to upload the document
+      let doc: DocumentUploadIF
       try {
         this.isDocumentLoading = true
-        psu = await LegalServices.getPresignedUrl(file.name)
-        const res = await LegalServices.uploadToUrl(psu.preSignedUrl, file, psu.key, this.getKeycloakGuid)
-        if (!res || res.status !== StatusCodes.OK) throw new Error()
+        doc = await LegalServices.uploadDocument(file, FilingTypes.CONTINUATION_IN, this.getEntityType,
+          DocumentTypes.AUTHORIZATION_FILE, this.getKeycloakGuid, this.getTempId, this.getFilingId)
       } catch {
         // set error message
         this.customErrorMessage = this.UPLOAD_FAILED_MESSAGE
@@ -300,7 +302,7 @@ export default class AuthorizationProof extends Mixins(DocumentMixin) {
           lastModified: file.lastModified,
           size: file.size
         } as File,
-        fileKey: psu.key,
+        fileKey: doc.key,
         fileName: file.name
       })
 

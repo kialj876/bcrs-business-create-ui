@@ -261,12 +261,12 @@ import { Action, Getter } from 'pinia-class'
 import { useStore } from '@/store/store'
 import {
   AffidavitResourceIF,
+  DocumentUploadIF,
   FormIF,
-  PresignedUrlIF,
   ValidationDetailIF,
   UploadAffidavitIF
 } from '@/interfaces'
-import { RouteNames, ItemTypes, PdfPageSize } from '@/enums'
+import { DocumentTypes, FilingTypes, RouteNames, ItemTypes, PdfPageSize } from '@/enums'
 import { CommonMixin, DocumentMixin } from '@/mixins'
 import FileUploadPreview from '@/components/common/FileUploadPreview.vue'
 import { CorpTypeCd, GetCorpNumberedDescription } from '@bcrs-shared-components/corp-type-module'
@@ -294,8 +294,10 @@ export default class CompleteAffidavit extends Mixins(CommonMixin, DocumentMixin
   // Global getters
   @Getter(useStore) getAffidavitResources!: AffidavitResourceIF
   @Getter(useStore) getAffidavitStep!: UploadAffidavitIF
+  @Getter(useStore) getBusinessId!: string
   @Getter(useStore) getBusinessLegalName!: string
   @Getter(useStore) getEntityType!: CorpTypeCd
+  @Getter(useStore) getFilingId!: number
   @Getter(useStore) getShowErrors!: boolean
   @Getter(useStore) getKeycloakGuid!: string
   @Getter(useStore) isEntityCoop!: boolean
@@ -367,14 +369,12 @@ export default class CompleteAffidavit extends Mixins(CommonMixin, DocumentMixin
   public async uploadPendingDocsToStorage () {
     const isPendingUpload = !this.uploadAffidavitDocKey
     if (isPendingUpload && this.hasValidUploadFile) {
-      // NB: will throw if API error
-      const doc: PresignedUrlIF = await LegalServices.getPresignedUrl(this.uploadAffidavitDoc.name)
+      try {
+        // NB: will throw if API error
+        const doc: DocumentUploadIF = await LegalServices.uploadDocument(this.uploadAffidavitDoc,
+          FilingTypes.DISSOLUTION, this.getEntityType, DocumentTypes.AFFIDAVIT,
+          this.getKeycloakGuid, this.getBusinessId, this.getFilingId)
 
-      // NB: will return error response if API error
-      const res =
-        await LegalServices.uploadToUrl(doc.preSignedUrl, this.uploadAffidavitDoc, doc.key, this.getKeycloakGuid)
-
-      if (res && res.status === 200) {
         const affidavitFile = {
           name: this.uploadAffidavitDoc.name,
           lastModified: this.uploadAffidavitDoc.lastModified,
@@ -385,7 +385,7 @@ export default class CompleteAffidavit extends Mixins(CommonMixin, DocumentMixin
           affidavitFile,
           docKey: doc.key
         })
-      } else {
+      } catch {
         // put file uploader into manual error mode by setting custom error message
         this.fileUploadCustomErrorMsg = this.UPLOAD_FAILED_MESSAGE
         this.hasValidUploadFile = false

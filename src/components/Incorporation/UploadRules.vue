@@ -287,11 +287,12 @@ import { useStore } from '@/store/store'
 import {
   CreateRulesIF,
   CreateRulesResourceIF,
+  DocumentUploadIF,
   FormIF,
-  PresignedUrlIF,
   ValidationDetailIF
 } from '@/interfaces'
-import { RouteNames, ItemTypes, PdfPageSize } from '@/enums'
+import { DocumentTypes, FilingTypes, RouteNames, ItemTypes, PdfPageSize } from '@/enums'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 import { CommonMixin, DocumentMixin } from '@/mixins'
 import FileUploadPreview from '@/components/common/FileUploadPreview.vue'
 import { LegalServices } from '@/services'
@@ -318,9 +319,12 @@ export default class UploadRules extends Mixins(CommonMixin, DocumentMixin) {
 
   @Getter(useStore) getCreateRulesResource!: CreateRulesResourceIF
   @Getter(useStore) getCreateRulesStep!: CreateRulesIF
+  @Getter(useStore) getEntityType!: CorpTypeCd
+  @Getter(useStore) getFilingId!: number
   @Getter(useStore) getNameRequestApprovedName!: string
   @Getter(useStore) getShowErrors!: boolean
   @Getter(useStore) getKeycloakGuid!: string
+  @Getter(useStore) getTempId!: string
 
   @Action(useStore) setRules!: (x: CreateRulesIF) => void
   @Action(useStore) setRulesStepValidity!: (x: ValidationDetailIF) => void
@@ -371,14 +375,12 @@ export default class UploadRules extends Mixins(CommonMixin, DocumentMixin) {
   public async uploadPendingDocsToStorage () {
     const isPendingUpload = !this.uploadRulesDocKey
     if (isPendingUpload && this.hasValidUploadFile) {
-      // NB: will throw if API error
-      const doc: PresignedUrlIF = await LegalServices.getPresignedUrl(this.uploadRulesDoc.name)
+      try {
+        // NB: will throw if API error
+        const doc: DocumentUploadIF = await LegalServices.uploadDocument(this.uploadRulesDoc,
+          FilingTypes.INCORPORATION_APPLICATION, this.getEntityType, DocumentTypes.COOP_RULES,
+          this.getKeycloakGuid, this.getTempId, this.getFilingId)
 
-      // NB: will return error response if API error
-      const res =
-        await LegalServices.uploadToUrl(doc.preSignedUrl, this.uploadRulesDoc, doc.key, this.getKeycloakGuid)
-
-      if (res && res.status === 200) {
         const rulesFile = {
           name: this.uploadRulesDoc.name,
           lastModified: this.uploadRulesDoc.lastModified,
@@ -389,7 +391,7 @@ export default class UploadRules extends Mixins(CommonMixin, DocumentMixin) {
           rulesFile,
           docKey: doc.key
         })
-      } else {
+      } catch {
         // put file uploader into manual error mode by setting custom error message
         this.fileUploadCustomErrorMsg = this.UPLOAD_FAILED_MESSAGE
         this.hasValidUploadFile = false

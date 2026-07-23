@@ -336,13 +336,14 @@ import { useStore } from '@/store/store'
 import {
   CreateMemorandumIF,
   CreateMemorandumResourceIF,
+  DocumentUploadIF,
   FormIF,
-  PresignedUrlIF,
   ValidationDetailIF
 } from '@/interfaces'
 
 // Enums
-import { RouteNames, ItemTypes, PdfPageSize } from '@/enums'
+import { DocumentTypes, FilingTypes, RouteNames, ItemTypes, PdfPageSize } from '@/enums'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 // Mixins
 import { CommonMixin, DocumentMixin } from '@/mixins'
@@ -364,9 +365,12 @@ export default class UploadMemorandum extends Mixins(CommonMixin, DocumentMixin)
 
   @Getter(useStore) getCreateMemorandumResource!: CreateMemorandumResourceIF
   @Getter(useStore) getCreateMemorandumStep!: CreateMemorandumIF
+  @Getter(useStore) getEntityType!: CorpTypeCd
+  @Getter(useStore) getFilingId!: number
   @Getter(useStore) getNameRequestApprovedName!: string
   @Getter(useStore) getShowErrors!: boolean
   @Getter(useStore) getKeycloakGuid!: string
+  @Getter(useStore) getTempId!: string
 
   @Action(useStore) setMemorandum!: (x: CreateMemorandumIF) => void
   @Action(useStore) setMemorandumStepValidity!: (x: ValidationDetailIF) => void
@@ -430,14 +434,12 @@ export default class UploadMemorandum extends Mixins(CommonMixin, DocumentMixin)
   public async uploadPendingDocsToStorage () {
     const isPendingUpload = !this.uploadMemorandumDocKey
     if (isPendingUpload && this.hasValidUploadFile) {
-      // NB: will throw if API error
-      const doc: PresignedUrlIF = await LegalServices.getPresignedUrl(this.uploadMemorandumDoc.name)
+      try {
+        // NB: will throw if API error
+        const doc: DocumentUploadIF = await LegalServices.uploadDocument(this.uploadMemorandumDoc,
+          FilingTypes.INCORPORATION_APPLICATION, this.getEntityType, DocumentTypes.COOP_MEMORANDUM,
+          this.getKeycloakGuid, this.getTempId, this.getFilingId)
 
-      // NB: will return error response if API error
-      const res =
-        await LegalServices.uploadToUrl(doc.preSignedUrl, this.uploadMemorandumDoc, doc.key, this.getKeycloakGuid)
-
-      if (res && res.status === 200) {
         const memorandumFile = {
           name: this.uploadMemorandumDoc.name,
           lastModified: this.uploadMemorandumDoc.lastModified,
@@ -448,7 +450,7 @@ export default class UploadMemorandum extends Mixins(CommonMixin, DocumentMixin)
           memorandumFile,
           docKey: doc.key
         })
-      } else {
+      } catch {
         // put file uploader into manual error mode by setting custom error message
         this.fileUploadCustomErrorMsg = this.UPLOAD_FAILED_MESSAGE
         this.hasValidUploadFile = false

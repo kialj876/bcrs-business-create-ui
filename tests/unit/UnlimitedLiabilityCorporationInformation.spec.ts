@@ -3,7 +3,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useStore } from '@/store/store'
 import { wrapperFactory } from '../vitest-wrapper-factory'
 import { ExistingBusinessInfoIF } from '@/interfaces'
+import { DocumentTypes, FilingTypes } from '@/enums'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
+import { LegalServices } from '@/services'
 import UnlimitedLiabilityCorporationInformation
   from '@/components/ContinuationIn/UnlimitedLiabilityCorporationInformation.vue'
 
@@ -67,6 +69,87 @@ describe('Unlimited Liability Corporation Information component', () => {
     expect(wrapper.find('.remove-document-button').exists()).toBe(true)
     expect(wrapper.find('.remove-document-button').text()).toBe('Remove')
 
+    wrapper.destroy()
+  })
+
+  it('uploads the affidavit and stores the document key', async () => {
+    // set some store values
+    store.stateModel.continuationIn.existingBusinessInfo = {} as ExistingBusinessInfoIF
+    store.stateModel.entityType = CorpTypeCd.ULC_CONTINUE_IN
+    store.stateModel.tempId = 'T1234567'
+    store.stateModel.filingId = 111
+
+    const uploadDocument = vi.spyOn(LegalServices, 'uploadDocument').mockResolvedValue(
+      { key: 'CORP-DS0100001003', documentServiceId: 'DS0100001003' }
+    )
+
+    const wrapper = wrapperFactory(UnlimitedLiabilityCorporationInformation)
+    await Vue.nextTick()
+
+    // simulate file selection
+    const vm = wrapper.vm as any
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    vm.onFileValidity(true)
+    await vm.onFileSelected(file)
+
+    // verify upload call and stored values
+    expect(uploadDocument).toHaveBeenCalledWith(file, FilingTypes.CONTINUATION_IN,
+      CorpTypeCd.ULC_CONTINUE_IN, DocumentTypes.DIRECTOR_AFFIDAVIT, null, 'T1234567', 111)
+    expect(store.stateModel.continuationIn.existingBusinessInfo.affidavitFileKey).toBe('CORP-DS0100001003')
+    expect(store.stateModel.continuationIn.existingBusinessInfo.affidavitFileName).toBe('affidavit.pdf')
+
+    vi.restoreAllMocks()
+    wrapper.destroy()
+  })
+
+  it('displays an error message when the upload fails', async () => {
+    // set some store values
+    store.stateModel.continuationIn.existingBusinessInfo = {} as ExistingBusinessInfoIF
+    store.stateModel.entityType = CorpTypeCd.ULC_CONTINUE_IN
+
+    vi.spyOn(LegalServices, 'uploadDocument').mockRejectedValue(new Error('went wrong'))
+
+    const wrapper = wrapperFactory(UnlimitedLiabilityCorporationInformation)
+    await Vue.nextTick()
+
+    // simulate file selection
+    const vm = wrapper.vm as any
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    vm.onFileValidity(true)
+    await vm.onFileSelected(file)
+
+    // verify error message and no stored values
+    expect(vm.customErrorMessage).toBe(vm.UPLOAD_FAILED_MESSAGE)
+    expect(store.stateModel.continuationIn.existingBusinessInfo.affidavitFileKey).toBeUndefined()
+
+    vi.restoreAllMocks()
+    wrapper.destroy()
+  })
+
+  it('deletes the document when Remove is clicked', async () => {
+    // set some store values
+    store.stateModel.continuationIn.existingBusinessInfo = {
+      affidavitFile: { name: 'test.pdf', size: 123456 } as File,
+      affidavitFileKey: 'CORP-DS0100001003',
+      affidavitFileName: 'test.pdf'
+    } as ExistingBusinessInfoIF
+    store.stateModel.entityType = CorpTypeCd.ULC_CONTINUE_IN
+
+    const deleteDocument = vi.spyOn(LegalServices, 'deleteDocument').mockResolvedValue(null)
+
+    const wrapper = wrapperFactory(UnlimitedLiabilityCorporationInformation)
+    await Vue.nextTick()
+
+    // simulate remove click
+    const vm = wrapper.vm as any
+    vm.onRemoveClicked()
+
+    // verify delete call and cleared values
+    expect(deleteDocument).toHaveBeenCalledWith('CORP-DS0100001003')
+    expect(store.stateModel.continuationIn.existingBusinessInfo.affidavitFileKey).toBeUndefined()
+    expect(store.stateModel.continuationIn.existingBusinessInfo.affidavitFileName).toBeUndefined()
+
+    vi.restoreAllMocks()
     wrapper.destroy()
   })
 })

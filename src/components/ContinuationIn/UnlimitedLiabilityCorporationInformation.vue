@@ -94,10 +94,11 @@
 <script lang="ts">
 import { Component, Emit, Mixins, Watch } from 'vue-property-decorator'
 import { Action, Getter } from 'pinia-class'
-import { StatusCodes } from 'http-status-codes'
 import { useStore } from '@/store/store'
 import { DateMixin, DocumentMixin } from '@/mixins'
-import { ExistingBusinessInfoIF, PresignedUrlIF } from '@/interfaces'
+import { DocumentTypes, FilingTypes } from '@/enums'
+import { ExistingBusinessInfoIF, DocumentUploadIF } from '@/interfaces'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 import FileUploadPreview from '../common/FileUploadPreview.vue'
 import { LegalServices } from '@/services'
 
@@ -113,9 +114,12 @@ export default class UnlimitedLiabilityCorporationInformation extends Mixins(Dat
   }
 
   @Getter(useStore) getCurrentDate!: string
+  @Getter(useStore) getEntityType!: CorpTypeCd
   @Getter(useStore) getExistingBusinessInfo!: ExistingBusinessInfoIF
+  @Getter(useStore) getFilingId!: number
   @Getter(useStore) getKeycloakGuid!: string
   @Getter(useStore) getShowErrors!: boolean
+  @Getter(useStore) getTempId!: string
 
   @Action(useStore) setExistingBusinessInfo!: (x: ExistingBusinessInfoIF) => void
   @Action(useStore) setHaveChanges!: (x: boolean) => void
@@ -165,13 +169,12 @@ export default class UnlimitedLiabilityCorporationInformation extends Mixins(Dat
         return // don't add to array
       }
 
-      // try to upload to Minio
-      let psu: PresignedUrlIF
+      // try to upload the document
+      let doc: DocumentUploadIF
       try {
         this.isDocumentLoading = true
-        psu = await LegalServices.getPresignedUrl(file.name)
-        const res = await LegalServices.uploadToUrl(psu.preSignedUrl, file, psu.key, this.getKeycloakGuid)
-        if (!res || res.status !== StatusCodes.OK) throw new Error()
+        doc = await LegalServices.uploadDocument(file, FilingTypes.CONTINUATION_IN, this.getEntityType,
+          DocumentTypes.DIRECTOR_AFFIDAVIT, this.getKeycloakGuid, this.getTempId, this.getFilingId)
       } catch {
         // set error message
         this.customErrorMessage = this.UPLOAD_FAILED_MESSAGE
@@ -186,7 +189,7 @@ export default class UnlimitedLiabilityCorporationInformation extends Mixins(Dat
         lastModified: file.lastModified,
         size: file.size
       } as File)
-      this.$set(this.getExistingBusinessInfo, 'affidavitFileKey', psu.key)
+      this.$set(this.getExistingBusinessInfo, 'affidavitFileKey', doc.key)
       this.$set(this.getExistingBusinessInfo, 'affidavitFileName', file.name)
 
       // user has changed something

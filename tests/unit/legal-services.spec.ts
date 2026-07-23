@@ -1,6 +1,9 @@
 import sinon from 'sinon'
 import LegalServices from '@/services/legal-services'
 import { AxiosInstance as axios } from '@/utils'
+import * as FeatureFlags from '@/utils/feature-flag-utils'
+import { DocumentTypes, FilingTypes } from '@/enums'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 // Populate session variables
 sessionStorage.setItem('BUSINESS_API_URL', 'https://business-api.url/')
@@ -135,19 +138,130 @@ describe('Legal Services', () => {
     // FUTURE
   })
 
-  it.skip('gets a pre-signed URL', async () => {
-    // FUTURE
+  it('uploads a document to DRS when the drs-upload feature is enabled', async () => {
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty, drs-upload')
+
+    // mock DRS upload response
+    const post = sinon.stub(axios, 'post')
+    post.withArgs('https://business-api.url/documents/client/dissolution/CP/affidavit')
+      .resolves({
+        status: 201,
+        data: {
+          documentServiceId: 'DS0100001003',
+          key: 'COOP-DS0100001003'
+        }
+      })
+
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    const doc = await LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
+      DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
+
+    expect(doc.key).toBe('COOP-DS0100001003')
+    expect(doc.documentServiceId).toBe('DS0100001003')
+    // verify document metadata query params
+    expect(post.firstCall.args[2].params).toEqual({
+      filename: 'affidavit.pdf',
+      businessIdentifier: 'CP1002605',
+      filingId: 111
+    })
+
+    sinon.restore()
+    vi.restoreAllMocks()
   })
 
-  it.skip('uploads a file to URL', async () => {
-    // FUTURE
+  it('throws when the DRS document upload fails', async () => {
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty, drs-upload')
+
+    // mock DRS upload error
+    sinon.stub(axios, 'post').rejects(new Error('went wrong'))
+
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    await expect(
+      LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
+        DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
+    ).rejects.toThrow()
+
+    sinon.restore()
+    vi.restoreAllMocks()
   })
 
-  it.skip('deletes a document', async () => {
-    // FUTURE
+  it('uploads a document via Minio when the drs-upload feature is disabled', async () => {
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty')
+
+    // mock presigned url + Minio upload responses
+    sinon.stub(axios, 'get').withArgs('https://business-api.url/documents/affidavit.pdf/signatures')
+      .resolves({
+        data: {
+          preSignedUrl: 'https://minio.url/affidavit.pdf',
+          key: 'minio-key-123'
+        }
+      })
+    sinon.stub(axios, 'put').withArgs('https://minio.url/affidavit.pdf')
+      .resolves({ status: 200 })
+
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    const doc = await LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
+      DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
+
+    expect(doc.key).toBe('minio-key-123')
+
+    sinon.restore()
+    vi.restoreAllMocks()
   })
 
-  it.skip('downloads a document', async () => {
-    // FUTURE
+  it('throws when the Minio document upload fails', async () => {
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('')
+
+    // mock presigned url response + Minio upload error
+    sinon.stub(axios, 'get').withArgs('https://business-api.url/documents/affidavit.pdf/signatures')
+      .resolves({
+        data: {
+          preSignedUrl: 'https://minio.url/affidavit.pdf',
+          key: 'minio-key-123'
+        }
+      })
+    sinon.stub(axios, 'put').rejects(new Error('went wrong'))
+
+    const file = new File(['data'], 'affidavit.pdf', { type: 'application/pdf' })
+    await expect(
+      LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
+        DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
+    ).rejects.toThrow()
+
+    sinon.restore()
+    vi.restoreAllMocks()
+  })
+
+  it('deletes a document', async () => {
+    const del = sinon.stub(axios, 'delete').resolves({ status: 200 })
+
+    // DRS-format key -> client endpoint
+    await LegalServices.deleteDocument('COOP-DS0100001003')
+    expect(del.firstCall.args[0]).toBe('https://business-api.url/documents/client/COOP-DS0100001003')
+
+    // legacy Minio key -> legacy endpoint
+    await LegalServices.deleteDocument('7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
+    expect(del.secondCall.args[0]).toBe('https://business-api.url/documents/7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
+
+    sinon.restore()
+  })
+
+  it('downloads a document', async () => {
+    // stub object URL functions (not implemented in jsdom)
+    window.URL.createObjectURL = vi.fn().mockReturnValue('blob:url')
+    window.URL.revokeObjectURL = vi.fn()
+
+    const get = sinon.stub(axios, 'get').resolves({ status: 200, data: 'pdf data' })
+
+    // DRS-format key -> client endpoint
+    await LegalServices.downloadDocument('COOP-DS0100001003', 'affidavit.pdf')
+    expect(get.firstCall.args[0]).toBe('https://business-api.url/documents/client/COOP-DS0100001003')
+
+    // legacy Minio key -> legacy endpoint
+    await LegalServices.downloadDocument('7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf', 'affidavit.pdf')
+    expect(get.secondCall.args[0]).toBe('https://business-api.url/documents/7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
+
+    sinon.restore()
+    vi.restoreAllMocks()
   })
 })

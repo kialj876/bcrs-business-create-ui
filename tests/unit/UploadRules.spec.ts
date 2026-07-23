@@ -3,6 +3,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useStore } from '@/store/store'
 import { shallowMount } from '@vue/test-utils'
 import { IncorporationResourceCp } from '@/resources/Incorporation/CP'
+import { DocumentTypes, FilingTypes } from '@/enums'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
+import { LegalServices } from '@/services'
 import UploadRules from '@/components/Incorporation/UploadRules.vue'
 
 const vuetify = new Vuetify({})
@@ -84,5 +87,71 @@ describe(`Upload Rules view for a COOP`, () => {
 
     const bulletList3 = bulletList.at(2).findAll('li')
     expect(bulletList3.length).toBe(helpSection.helpText.section3.items.length)
+  })
+})
+
+describe('Upload Rules - document upload', () => {
+  let wrapper: any
+
+  beforeEach(() => {
+    store.resourceModel.createRules = IncorporationResourceCp.createRules
+    store.stateModel.entityType = CorpTypeCd.COOP
+    store.stateModel.tempId = 'T1234567'
+    store.stateModel.filingId = 111
+    store.stateModel.createRulesStep.rulesFile = null
+    store.stateModel.createRulesStep.docKey = null
+    wrapper = shallowMount(UploadRules, { vuetify })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    wrapper.destroy()
+  })
+
+  it('uploads the rules file and stores the document key', async () => {
+    const uploadDocument = vi.spyOn(LegalServices, 'uploadDocument').mockResolvedValue(
+      { key: 'COOP-DS0100001003', documentServiceId: 'DS0100001003' }
+    )
+
+    // simulate file selection
+    const vm = wrapper.vm as any
+    const file = new File(['data'], 'rules.pdf', { type: 'application/pdf' })
+    vm.onFileValidity(true)
+    await vm.onFileSelected(file)
+
+    // verify upload call and stored values
+    expect(uploadDocument).toHaveBeenCalledWith(file, FilingTypes.INCORPORATION_APPLICATION,
+      CorpTypeCd.COOP, DocumentTypes.COOP_RULES, store.getKeycloakGuid, 'T1234567', 111)
+    expect(store.stateModel.createRulesStep.docKey).toBe('COOP-DS0100001003')
+    expect(store.stateModel.createRulesStep.rulesFile.name).toBe('rules.pdf')
+  })
+
+  it('displays an error message when the upload fails', async () => {
+    vi.spyOn(LegalServices, 'uploadDocument').mockRejectedValue(new Error('went wrong'))
+
+    // simulate file selection
+    const vm = wrapper.vm as any
+    const file = new File(['data'], 'rules.pdf', { type: 'application/pdf' })
+    vm.onFileValidity(true)
+    await vm.onFileSelected(file)
+
+    // verify error state and no stored values
+    expect(vm.fileUploadCustomErrorMsg).toBe(vm.UPLOAD_FAILED_MESSAGE)
+    expect(vm.hasValidUploadFile).toBe(false)
+    expect(store.stateModel.createRulesStep.docKey).toBeNull()
+  })
+
+  it('deletes the document when the file is cleared', async () => {
+    const deleteDocument = vi.spyOn(LegalServices, 'deleteDocument').mockResolvedValue(null)
+
+    // seed a local doc key then simulate file clear
+    const vm = wrapper.vm as any
+    vm.uploadRulesDocKey = 'COOP-DS0100001003'
+    await vm.onFileSelected(null)
+
+    // verify delete call and cleared values
+    expect(deleteDocument).toHaveBeenCalledWith('COOP-DS0100001003')
+    expect(store.stateModel.createRulesStep.docKey).toBeNull()
+    expect(store.stateModel.createRulesStep.rulesFile).toBeNull()
   })
 })
