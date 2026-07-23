@@ -9,6 +9,11 @@ import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 sessionStorage.setItem('BUSINESS_API_URL', 'https://business-api.url/')
 
 describe('Legal Services', () => {
+  afterEach(() => {
+    sinon.restore()
+    vi.restoreAllMocks()
+  })
+
   it.skip('fetches the filings list', async () => {
     // FUTURE
   })
@@ -42,8 +47,6 @@ describe('Legal Services', () => {
     expect(draft.registration).toHaveProperty('offices')
     expect(draft.registration).toHaveProperty('contactPoint')
     expect(draft.registration).toHaveProperty('parties')
-
-    sinon.restore()
   })
 
   it('fetches the first filing', async () => {
@@ -65,8 +68,6 @@ describe('Legal Services', () => {
     expect(draft).not.toBeFalsy()
     expect(draft).toHaveProperty('name')
     expect(draft).toHaveProperty('filingId')
-
-    sinon.restore()
   })
 
   it.skip('fetches the first task', async () => {
@@ -122,8 +123,6 @@ describe('Legal Services', () => {
     expect(response.length).toEqual(2)
     expect(response.at(0)).toHaveProperty('date')
     expect(response.at(0)).toHaveProperty('type')
-
-    sinon.restore()
   })
 
   it.skip('fetches addresses', async () => {
@@ -139,7 +138,7 @@ describe('Legal Services', () => {
   })
 
   it('uploads a document to DRS when the drs-upload feature is enabled', async () => {
-    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty, drs-upload')
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty,drs-upload')
 
     // mock DRS upload response
     const post = sinon.stub(axios, 'post')
@@ -164,13 +163,10 @@ describe('Legal Services', () => {
       businessIdentifier: 'CP1002605',
       filingId: 111
     })
-
-    sinon.restore()
-    vi.restoreAllMocks()
   })
 
   it('throws when the DRS document upload fails', async () => {
-    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty, drs-upload')
+    vi.spyOn(FeatureFlags, 'GetFeatureFlag').mockReturnValue('incorporationApplication-completingParty,drs-upload')
 
     // mock DRS upload error
     sinon.stub(axios, 'post').rejects(new Error('went wrong'))
@@ -180,9 +176,6 @@ describe('Legal Services', () => {
       LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
         DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
     ).rejects.toThrow()
-
-    sinon.restore()
-    vi.restoreAllMocks()
   })
 
   it('uploads a document via Minio when the drs-upload feature is disabled', async () => {
@@ -204,9 +197,6 @@ describe('Legal Services', () => {
       DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
 
     expect(doc.key).toBe('minio-key-123')
-
-    sinon.restore()
-    vi.restoreAllMocks()
   })
 
   it('throws when the Minio document upload fails', async () => {
@@ -227,9 +217,6 @@ describe('Legal Services', () => {
       LegalServices.uploadDocument(file, FilingTypes.DISSOLUTION, CorpTypeCd.COOP,
         DocumentTypes.AFFIDAVIT, 'keycloak-guid', 'CP1002605', 111)
     ).rejects.toThrow()
-
-    sinon.restore()
-    vi.restoreAllMocks()
   })
 
   it('deletes a document', async () => {
@@ -242,8 +229,6 @@ describe('Legal Services', () => {
     // legacy Minio key -> legacy endpoint
     await LegalServices.deleteDocument('7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
     expect(del.secondCall.args[0]).toBe('https://business-api.url/documents/7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
-
-    sinon.restore()
   })
 
   it('downloads a document', async () => {
@@ -260,8 +245,5 @@ describe('Legal Services', () => {
     // legacy Minio key -> legacy endpoint
     await LegalServices.downloadDocument('7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf', 'affidavit.pdf')
     expect(get.secondCall.args[0]).toBe('https://business-api.url/documents/7e0ab7b9-9d43-46bd-9f9c-8fca2ab77854.pdf')
-
-    sinon.restore()
-    vi.restoreAllMocks()
   })
 })
