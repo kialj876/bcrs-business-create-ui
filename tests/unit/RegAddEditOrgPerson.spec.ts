@@ -636,7 +636,8 @@ describe('Registration Add/Edit Org/Person component', () => {
     wrapper.destroy()
   })
 
-  it('displays error message when user does not enter person names', async () => {
+  it('displays error message when staff does not enter person names', async () => {
+    setAuthRole(store, AuthorizationRoles.STAFF)
     const wrapper = createComponent(validCompletingParty, NaN, null)
 
     const firstNameInput = wrapper.find(`${firstNameSelector} input`)
@@ -658,9 +659,11 @@ describe('Registration Add/Edit Org/Person component', () => {
     expect(wrapper.vm.$data.addPersonOrgFormValid).toBe(false)
 
     wrapper.destroy()
+    setAuthRole(store, AuthorizationRoles.PUBLIC_USER)
   })
 
-  it('Displays error message when user enters person names that are too long', async () => {
+  it('Displays error message when staff enters person names that are too long', async () => {
+    setAuthRole(store, AuthorizationRoles.STAFF)
     const wrapper = createComponent(validCompletingParty, NaN, null)
 
     const firstNameInput = wrapper.find(`${firstNameSelector} input`)
@@ -683,6 +686,31 @@ describe('Registration Add/Edit Org/Person component', () => {
     expect(messages.at(1).text()).toBe('Cannot exceed 30 characters')
     expect(messages.at(2).text()).toBe('Cannot exceed 30 characters')
     expect(wrapper.vm.$data.addPersonOrgFormValid).toBe(false)
+
+    wrapper.destroy()
+    setAuthRole(store, AuthorizationRoles.PUBLIC_USER)
+  })
+
+  it('does not validate completing party names when they are not editable by the user', async () => {
+    const wrapper = createComponent(validCompletingParty, NaN, null)
+
+    const firstNameInput = wrapper.find(`${firstNameSelector} input`)
+    const middleNameInput = wrapper.find(`${middleNameSelector} input`)
+    const lastNameInput = wrapper.find(`${lastNameSelector} input`)
+
+    firstNameInput.setValue('1234567890123456789012345678901')
+    firstNameInput.trigger('change')
+    middleNameInput.setValue('1234567890123456789012345678901')
+    middleNameInput.trigger('change')
+    lastNameInput.setValue('1234567890123456789012345678901')
+    lastNameInput.trigger('change')
+    await Vue.nextTick()
+    await flushPromises()
+    await Vue.nextTick()
+
+    const messages = wrapper.findAll('.v-messages__message')
+    expect(messages.length).toBe(0)
+    expect(wrapper.vm.$data.addPersonOrgFormValid).toBe(true)
 
     wrapper.destroy()
   })

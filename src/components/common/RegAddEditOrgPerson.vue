@@ -99,26 +99,26 @@
                   filled
                   class="item first-name"
                   label="First Name"
-                  :rules="enableRules ?
+                  :rules="enableRules && !isCompletingPartyLocked ?
                     (isCompletingParty ? Rules.FirstNameRulesFirmsCP :
                       Rules.FirstNameRulesFirms) : []"
-                  :readonly="isCompletingParty && !IsAuthorized(AuthorizedActions.EDITABLE_COMPLETING_PARTY)"
+                  :readonly="isCompletingPartyLocked"
                 />
                 <v-text-field
                   v-model.trim="orgPerson.officer.middleName"
                   filled
                   class="item middle-name"
                   label="Middle Name (Optional)"
-                  :rules="enableRules ? Rules.MiddleNameRulesFirms : []"
-                  :readonly="isCompletingParty && !IsAuthorized(AuthorizedActions.EDITABLE_COMPLETING_PARTY)"
+                  :rules="enableRules && !isCompletingPartyLocked ? Rules.MiddleNameRulesFirms : []"
+                  :readonly="isCompletingPartyLocked"
                 />
                 <v-text-field
                   v-model.trim="orgPerson.officer.lastName"
                   filled
                   class="item last-name"
                   label="Last Name"
-                  :rules="enableRules ? Rules.LastNameRules : []"
-                  :readonly="isCompletingParty && !IsAuthorized(AuthorizedActions.EDITABLE_COMPLETING_PARTY)"
+                  :rules="enableRules && !isCompletingPartyLocked ? Rules.LastNameRules : []"
+                  :readonly="isCompletingPartyLocked"
                 />
               </div>
             </article>
@@ -536,6 +536,11 @@ export default class RegAddEditOrgPerson extends Mixins(AddEditOrgPersonMixin) {
 
   /** The document type that will be sent to the entered email adress. */
   @Prop({ default: '' }) readonly docType!: string
+
+  /** Whether the Completing Party name is pre-populated from the user's login and not editable. */
+  get isCompletingPartyLocked (): boolean {
+    return this.isCompletingParty && !this.IsAuthorized(this.AuthorizedActions.EDITABLE_COMPLETING_PARTY)
+  }
 
   /** The validation rules for the Organization Name. */
   readonly OrgNameRules: Array<VuetifyRuleFunction> = [
