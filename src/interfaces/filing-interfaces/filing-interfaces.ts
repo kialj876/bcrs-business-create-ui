@@ -58,6 +58,7 @@ export interface AmalgamationFilingIF {
     // BEN / CC / BC / ULC only:
     shareStructure?: {
       shareClasses: ShareClassIF[]
+      resolutionDates?: string[]
     }
     incorporationAgreement?: {
       agreementType: string

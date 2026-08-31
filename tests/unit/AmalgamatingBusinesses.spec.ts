@@ -12,6 +12,7 @@ import { AmalgamationTypes, EntityStates, FilingTypes, JurisdictionLocation,
   RestorationTypes } from '@bcrs-shared-components/enums'
 import { AuthServices, LegalServices } from '@/services'
 import { AmalgamatingBusinessIF } from '@/interfaces'
+import * as FeatureFlags from '@/utils/feature-flag-utils'
 import { setAuthRole } from '../set-auth-role'
 
 const vuetify = new Vuetify({})
@@ -245,6 +246,85 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
     // open panel
     await wrapper.setData({ isAddingAmalgamatingBusiness: true })
 
+    // mock services functions
+    const authSpy = vi.spyOn((AuthServices as any), 'fetchAuthInfo')
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockResolvedValue({
+      business: {
+        identifier: 'A1234567',
+        legalName: 'Extra Pro Business',
+        legalType: 'A',
+        state: 'ACTIVE',
+        jurisdiction: 'ON'
+      }
+    })
+
+    // simulate saving an extra pro business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.EXTRA_PRO_A,
+      name: 'Extra Pro Business',
+      identifier: 'A1234567'
+    })
+
+    // verify data - extra pros are added as COLIN businesses with snapshot data
+    expect(store.getAmalgamatingBusinesses.length).toBe(1)
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.type).toBe(AmlTypes.COLIN)
+    expect(business.role).toBe(AmlRoles.AMALGAMATING)
+    expect(business.identifier).toBe('A1234567')
+    expect(business.name).toBe('Extra Pro Business')
+    expect(business.legalType).toBe(CorpTypeCd.EXTRA_PRO_A)
+    expect(business.jurisdiction).toBe('ON')
+    expect(business.foreignJurisdiction).toBeUndefined()
+
+    // verify no gating flags were set (extra pros keep the foreign rule set)
+    expect(business.isHistorical).toBeUndefined()
+    expect(business.isNotInGoodStanding).toBeUndefined()
+
+    // verify no auth info call (no affiliation concept for extra pros)
+    expect(authSpy).not.toHaveBeenCalled()
+
+    // verify panel is now closed
+    expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+
+    vi.resetAllMocks()
+  })
+
+  it('saves a minimal amalgamating business - Extra Pro - snapshot unauthorized', async () => {
+    // open panel
+    await wrapper.setData({ isAddingAmalgamatingBusiness: true })
+
+    // mock services functions
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockRejectedValue({ response: { status: 401 } })
+
+    // simulate saving an extra pro business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.EXTRA_PRO_A,
+      name: 'Extra Pro Business',
+      identifier: 'A1234567'
+    })
+
+    // verify data - minimal row that the staff-only (foreign) rule will flag
+    expect(store.getAmalgamatingBusinesses.length).toBe(1)
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.type).toBe(AmlTypes.COLIN)
+    expect(business.identifier).toBe('A1234567')
+    expect(business.name).toBe('Extra Pro Business')
+    expect(business.legalType).toBe(CorpTypeCd.EXTRA_PRO_A)
+    expect(business.jurisdiction).toBeUndefined()
+
+    // verify panel is now closed
+    expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+
+    vi.resetAllMocks()
+  })
+
+  it('doesn\'t save an amalgamating business - Extra Pro - snapshot error', async () => {
+    // open panel
+    await wrapper.setData({ isAddingAmalgamatingBusiness: true })
+
+    // mock services functions
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockRejectedValue({ response: { status: 404 } })
+
     // simulate saving an extra pro business
     await wrapper.vm.saveAmalgamatingBusiness({
       legalType: CorpTypeCd.EXTRA_PRO_A,
@@ -253,16 +333,13 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
     })
 
     // verify data
-    expect(store.getAmalgamatingBusinesses.length).toBe(1)
-    const business = store.getAmalgamatingBusinesses[0] as any
-    expect(business.type).toBe(AmlTypes.FOREIGN)
-    expect(business.role).toBe(AmlRoles.AMALGAMATING)
-    expect(business.foreignJurisdiction).toEqual({ country: 'CA', region: 'BC' })
-    expect(business.legalName).toBe('Extra Pro Business')
-    expect(business.identifier).toBe('A1234567')
+    expect(store.getAmalgamatingBusinesses.length).toBe(0)
 
-    // verify panel is now closed
-    expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+    // verify dialog is displayed
+    expect(wrapper.vm.errorDialog).toBe(true)
+    expect(wrapper.vm.errorDialogTitle).toBe('Something went wrong')
+
+    vi.resetAllMocks()
   })
 
   it('saves an amalgamating business - BC - unaffiliated - non-staff', async () => {
@@ -444,12 +521,13 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
     // pre-populate an extra pro business
     store.stateModel.amalgamation.amalgamatingBusinesses = [
       {
-        type: AmlTypes.FOREIGN,
+        type: AmlTypes.COLIN,
         role: AmlRoles.AMALGAMATING,
-        foreignJurisdiction: { country: 'CA', region: 'British Columbia' },
-        legalName: 'Extra Pro Business',
-        identifier: 'A1234567'
-      }
+        identifier: 'A1234567',
+        name: 'Extra Pro Business',
+        legalType: CorpTypeCd.EXTRA_PRO_A,
+        jurisdiction: 'ON'
+      } as any
     ]
     expect(store.getAmalgamatingBusinesses.length).toBe(1)
 
@@ -458,6 +536,17 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
 
     // verify snackbar is not displayed
     expect(wrapper.vm.snackbar).toBe(false)
+
+    // mock services functions
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockResolvedValue({
+      business: {
+        identifier: 'A1234567',
+        legalName: 'Extra Pro Business',
+        legalType: 'A',
+        state: 'ACTIVE',
+        jurisdiction: 'ON'
+      }
+    })
 
     // try to save a duplicate extra pro business
     await wrapper.vm.saveAmalgamatingBusiness({
@@ -475,6 +564,8 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
 
     // verify panel is now closed
     expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+
+    vi.resetAllMocks()
   })
 
   it('save an amalgamating business - BC', async () => {
@@ -601,6 +692,203 @@ describe('Amalgamating Businesses - add amalgamating business', () => {
 
     // verify panel is now closed
     expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+  })
+})
+
+describe('Amalgamating Businesses - add amalgamating COLIN business', () => {
+  let wrapper: any
+
+  const COLIN_SNAPSHOT = {
+    business: {
+      identifier: 'BC7654321',
+      legalName: 'Colin Business Ltd',
+      legalType: 'BC',
+      state: 'ACTIVE',
+      goodStanding: true,
+      adminFreeze: false,
+      hasFutureEffectiveFiling: false
+    },
+    offices: {
+      registeredOffice: {
+        mailingAddress: { streetAddress: '123 Colin St' },
+        deliveryAddress: { streetAddress: '123 Colin St' }
+      }
+    }
+  }
+
+  beforeEach(() => {
+    // initial state
+    setAuthRole(store, AuthorizationRoles.PUBLIC_USER)
+    store.stateModel.amalgamation.amalgamatingBusinesses = []
+
+    wrapper = mount(AmalgamatingBusinesses, { vuetify })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    wrapper.destroy()
+  })
+
+  it('saves a COLIN business - snapshot success', async () => {
+    // mock feature released + services functions
+    vi.spyOn(FeatureFlags, 'IsFeatureReleased').mockImplementation(
+      name => (name === 'amalgamation-colin-businesses')
+    )
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue({ contacts: [{ email: 'colin@example.com' }] })
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockResolvedValue(COLIN_SNAPSHOT)
+
+    // open panel
+    await wrapper.setData({ isAddingAmalgamatingBusiness: true })
+
+    // simulate saving a COLIN business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Colin Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data
+    expect(store.getAmalgamatingBusinesses.length).toBe(1)
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.type).toBe(AmlTypes.COLIN)
+    expect(business.role).toBe(AmlRoles.AMALGAMATING)
+    expect(business.identifier).toBe('BC7654321')
+    expect(business.name).toBe('Colin Business Ltd')
+    expect(business.legalType).toBe('BC')
+    expect(business.authInfo).toEqual({ contacts: [{ email: 'colin@example.com' }] })
+    expect(business.addresses).toEqual(COLIN_SNAPSHOT.offices)
+    expect(business.isNotInGoodStanding).toBe(false)
+    expect(business.isFrozen).toBe(false)
+    expect(business.isFutureEffective).toBe(false)
+    expect(business.isHistorical).toBe(false)
+
+    // verify panel is now closed
+    expect(wrapper.vm.isAddingAmalgamatingBusiness).toBe(false)
+  })
+
+  it('flags a null goodStanding as not in good standing', async () => {
+    // mock feature released + services functions
+    vi.spyOn(FeatureFlags, 'IsFeatureReleased').mockReturnValue(true)
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockResolvedValue({
+      ...COLIN_SNAPSHOT,
+      business: { ...COLIN_SNAPSHOT.business, goodStanding: null }
+    })
+
+    // simulate saving a COLIN business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Colin Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.isNotInGoodStanding).toBe(true)
+  })
+
+  it('saves a minimal COLIN business - snapshot unauthorized', async () => {
+    // mock feature released + services functions
+    vi.spyOn(FeatureFlags, 'IsFeatureReleased').mockReturnValue(true)
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue({ status: 'FORBIDDEN' })
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockRejectedValue({ response: { status: 401 } })
+
+    // simulate saving a COLIN business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Colin Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data - minimal row that the Not Affiliated rule will flag
+    expect(store.getAmalgamatingBusinesses.length).toBe(1)
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.type).toBe(AmlTypes.COLIN)
+    expect(business.identifier).toBe('BC7654321')
+    expect(business.name).toBe('Colin Business Ltd')
+    expect(business.legalType).toBe(CorpTypeCd.BC_COMPANY)
+    expect(business.addresses).toBeUndefined()
+    expect(business.authInfo).toBeUndefined()
+  })
+
+  it('falls through to the LEAR flow when the snapshot reports 404', async () => {
+    // mock feature released + services functions (COLIN snapshot 404s; LEAR flow succeeds)
+    vi.spyOn(FeatureFlags, 'IsFeatureReleased').mockReturnValue(true)
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockRejectedValue({ response: { status: 404 } })
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue({ contacts: [] })
+    vi.spyOn((LegalServices as any), 'fetchBusinessInfo').mockResolvedValue({
+      identifier: 'BC7654321',
+      legalName: 'Migrated Business Ltd',
+      legalType: CorpTypeCd.BC_COMPANY,
+      state: EntityStates.ACTIVE,
+      goodStanding: true
+    })
+    vi.spyOn((LegalServices as any), 'fetchAddresses').mockResolvedValue({})
+    vi.spyOn((LegalServices as any), 'fetchFirstTask').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchFirstOrOnlyFiling').mockResolvedValue({ status: FilingStatus.COMPLETED })
+
+    // simulate saving a business that Solr still reports as not modernized
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Migrated Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data - the business was added down the LEAR path
+    expect(store.getAmalgamatingBusinesses.length).toBe(1)
+    const business = store.getAmalgamatingBusinesses[0] as any
+    expect(business.type).toBe(AmlTypes.LEAR)
+    expect(business.name).toBe('Migrated Business Ltd')
+  })
+
+  it('doesn\'t save a COLIN business - snapshot error', async () => {
+    // mock feature released + services functions
+    vi.spyOn(FeatureFlags, 'IsFeatureReleased').mockReturnValue(true)
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchColinSnapshot').mockRejectedValue({ response: { status: 500 } })
+
+    // simulate saving a COLIN business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Colin Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data
+    expect(store.getAmalgamatingBusinesses.length).toBe(0)
+
+    // verify dialog is displayed
+    expect(wrapper.vm.errorDialog).toBe(true)
+    expect(wrapper.vm.errorDialogTitle).toBe('Something went wrong')
+  })
+
+  it('ignores the COLIN path when the feature is not released', async () => {
+    // NB - IsFeatureReleased is not mocked, so the default flag value (no features) applies
+    const colinSpy = vi.spyOn((LegalServices as any), 'fetchColinSnapshot')
+    vi.spyOn((AuthServices as any), 'fetchAuthInfo').mockResolvedValue({ status: 'NOT_FOUND' })
+    vi.spyOn((LegalServices as any), 'fetchBusinessInfo').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchAddresses').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchFirstTask').mockResolvedValue(null)
+    vi.spyOn((LegalServices as any), 'fetchFirstOrOnlyFiling').mockResolvedValue(null)
+
+    // simulate saving a COLIN business
+    await wrapper.vm.saveAmalgamatingBusiness({
+      legalType: CorpTypeCd.BC_COMPANY,
+      name: 'Colin Business Ltd',
+      identifier: 'BC7654321',
+      modernized: false
+    })
+
+    // verify data - today's dead-end dialog
+    expect(colinSpy).not.toHaveBeenCalled()
+    expect(store.getAmalgamatingBusinesses.length).toBe(0)
+    expect(wrapper.vm.errorDialog).toBe(true)
+    expect(wrapper.vm.errorDialogTitle).toBe('Unable to add business')
   })
 })
 

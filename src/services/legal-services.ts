@@ -1,8 +1,8 @@
 import { AxiosInstance as axios } from '@/utils'
 import { AxiosResponse } from 'axios'
 import { StatusCodes } from 'http-status-codes'
-import { BusinessIF, DissolutionFilingIF, DocumentUploadIF, IncorporationFilingIF, NameRequestIF, OrgPersonIF,
-  ResolutionIF } from '@/interfaces'
+import { BusinessIF, ColinSnapshotIF, DissolutionFilingIF, DocumentUploadIF, IncorporationFilingIF, NameRequestIF,
+  OrgPersonIF, ResolutionIF } from '@/interfaces'
 import { AuthorizedActions, DocumentTypes, FilingTypes, RoleTypes } from '@/enums'
 import { ShareStructureIF } from '@bcrs-shared-components/interfaces'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
@@ -304,6 +304,40 @@ export default class LegalServices {
         const data = response?.data
         if (!data) throw new Error('Invalid API response')
         return data.business
+      })
+  }
+
+  /**
+   * Fetches the COLIN snapshot of a business not yet managed in LEAR.
+   * @param businessId the business identifier
+   * @returns a promise to return the COLIN snapshot
+   */
+  static async fetchColinSnapshot (businessId: string): Promise<ColinSnapshotIF> {
+    const url = `${this.businessApiUrl}businesses/${businessId}/colin-snapshot`
+
+    return axios.get(url)
+      .then(response => {
+        const data = response?.data
+        if (!data?.business) throw new Error('Invalid API response')
+
+        // >>> TEMPORARY dev-test stub - corrupt directors/offices/shares so the
+        // >>> prepopulated-data validation can be exercised. REMOVE BEFORE COMMIT.
+        for (const party of (data.parties || [])) {
+          party.officer.firstName = ''
+          if (party.deliveryAddress) party.deliveryAddress.streetAddress = ''
+        }
+        const registeredDelivery = data.offices?.registeredOffice?.deliveryAddress
+        if (registeredDelivery) {
+          registeredDelivery.postalCode = 'V0N1G0'
+          registeredDelivery.country = 'CA'
+          registeredDelivery.region = 'BC'
+        }
+        for (const shareClass of (data.shareClasses || [])) {
+          shareClass.name = ''
+        }
+        // <<< END TEMPORARY
+
+        return data
       })
   }
 

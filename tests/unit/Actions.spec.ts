@@ -758,3 +758,51 @@ describe('Actions component - Conditionally disabled File and Pay button', () =>
     expect(wrapper.find('#file-pay-btn').attributes('disabled')).toBe('true')
   })
 })
+
+describe('Actions component - Amalgamation pre-submit error handling', () => {
+  let wrapper: any
+
+  beforeEach(() => {
+    mockUpdateFiling.mockClear()
+
+    store.stateModel.tombstone = {
+      filingType: FilingTypes.AMALGAMATION_APPLICATION,
+      userEmail: 'user@example.com',
+      authorizedActions: []
+    } as TombstoneIF
+
+    const localVue = createLocalVue()
+    localVue.use(VueRouter)
+    const router = mockRouter.mock()
+    router.push({ name: 'incorporation-review-confirm', query: { id: 'T1234567' } })
+    wrapper = shallowMount(Actions, { localVue, router, vuetify })
+  })
+
+  afterEach(() => {
+    wrapper.destroy()
+  })
+
+  it('emits save-error-event when the pre-submit table refresh fails', async () => {
+    // mock the console.log function to hide "Error validating table in onClickFilePay():"
+    const { log } = console
+    console.log = vi.fn()
+
+    vi.spyOn(wrapper.vm, 'refetchAmalgamatingBusinessesInfo')
+      .mockRejectedValue(new Error('Unable to fetch COLIN snapshot'))
+
+    await wrapper.vm.onClickFilePay()
+
+    // verify the user is told the submission didn't proceed
+    const rootWrapper = createWrapper(wrapper.vm.$root)
+    const events = rootWrapper.emitted('save-error-event')
+    expect(events.length).toBe(1)
+    expect(events[0][0].message).toBe('Unable to fetch COLIN snapshot')
+
+    // verify no filing was submitted and the buttons are re-enabled
+    expect(mockUpdateFiling).not.toHaveBeenCalled()
+    expect(store.stateModel.isFilingPaying).toBe(false)
+
+    // restore console.log
+    console.log = log
+  })
+})

@@ -667,3 +667,58 @@ describe('Continuation In Filing - staff payment', () => {
     expect(store.getStaffPaymentStep.staffPayment.option).toBe(StaffPaymentOptions.NONE)
   })
 })
+
+describe('Amalgamation Filing', () => {
+  let wrapper: any
+
+  beforeEach(() => {
+    wrapper = wrapperFactory(MixinTester, null, {})
+    const s = useStore()
+    s.stateModel.tombstone.filingType = FilingTypes.AMALGAMATION_APPLICATION
+    s.setEntityType(CorpTypeCd.BENEFIT_COMPANY)
+  })
+
+  afterEach(() => {
+    wrapper.destroy()
+  })
+
+  it('emits shareStructure.resolutionDates when there are resolutions', () => {
+    const s = useStore()
+    s.setResolutions([{ date: '2020-05-13' }, { date: '2021-06-14' }] as any)
+
+    const filing = wrapper.vm.buildAmalgamationFiling()
+
+    expect(filing.amalgamationApplication.shareStructure.resolutionDates).toEqual(['2020-05-13', '2021-06-14'])
+    // the resolution objects are still carried for draft restore
+    expect(filing.amalgamationApplication.resolutions).toEqual([{ date: '2020-05-13' }, { date: '2021-06-14' }])
+  })
+
+  it('omits shareStructure.resolutionDates when there are no resolutions', () => {
+    const s = useStore()
+    s.setResolutions([])
+
+    const filing = wrapper.vm.buildAmalgamationFiling()
+
+    expect(filing.amalgamationApplication.shareStructure.resolutionDates).toBeUndefined()
+  })
+
+  it('serializes an extrapro COLIN row with no foreignJurisdiction', () => {
+    const s = useStore()
+    s.setAmalgamatingBusinesses([{
+      type: 'colin',
+      role: 'amalgamating',
+      identifier: 'A1234567',
+      name: 'Extra Pro Business',
+      legalType: CorpTypeCd.EXTRA_PRO_A,
+      jurisdiction: 'ON'
+    }] as any)
+
+    const filing = wrapper.vm.buildAmalgamationFiling()
+
+    const entry = filing.amalgamationApplication.amalgamatingBusinesses[0]
+    expect(entry.type).toBe('colin')
+    expect(entry.identifier).toBe('A1234567')
+    expect(entry.foreignJurisdiction).toBeUndefined()
+    expect(entry.legalName).toBeUndefined()
+  })
+})

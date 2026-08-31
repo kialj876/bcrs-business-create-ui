@@ -150,6 +150,29 @@
             </v-icon>
             <span class="rule-item-txt">{{ rule.text }}</span>
           </li>
+          <li
+            v-if="rule.id === RuleIds.COMPLETE_DIRECTOR_INFO"
+            :key="index"
+          >
+            <v-icon
+              v-if="validDirectorInfo"
+              color="green darken-2"
+              class="dir-info-valid"
+            >
+              mdi-check
+            </v-icon>
+            <v-icon
+              v-else-if="getShowErrors"
+              color="error"
+              class="dir-info-invalid"
+            >
+              mdi-close
+            </v-icon>
+            <v-icon v-else>
+              mdi-circle-small
+            </v-icon>
+            <span class="rule-item-txt">{{ rule.text }}</span>
+          </li>
         </template>
       </ul>
     </section>
@@ -242,6 +265,7 @@
         :isSummary="false"
         :disabled="showOrgPersonForm"
         :showDirectors="getPeopleAndRolesResource.showDirectors"
+        :readonlyDirectors="getPeopleAndRolesResource.readonlyDirectors"
         @editPerson="onEditPerson($event)"
         @removePerson="onRemovePerson($event)"
       />

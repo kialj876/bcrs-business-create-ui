@@ -38,7 +38,7 @@
           </td>
 
           <td class="business-address">
-            <template v-if="item.type === AmlTypes.LEAR">
+            <template v-if="isLearOrBcColin(item)">
               <BaseAddress
                 v-if="item.addresses"
                 :address="registeredOfficeMailingAddress(item)"
@@ -46,7 +46,7 @@
               <span v-else>Affiliate to view</span>
             </template>
 
-            <template v-if="item.type === AmlTypes.FOREIGN">
+            <template v-if="isForeignOrXproColin(item)">
               {{ jurisdiction(item) }}
             </template>
           </td>
@@ -162,11 +162,11 @@ export default class BusinessTable extends Mixins(AmalgamationMixin) {
 
   /** Whether to show the more actions menu for specified item. */
   showMoreActionsMenu (item: AmalgamatingBusinessIF): boolean {
-    // only show for short-form amalgamating LEAR businesses
+    // only show for short-form amalgamating LEAR or (non-extrapro) COLIN businesses
     return (
       (this.isAmalgamationFilingHorizontal || this.isAmalgamationFilingVertical) &&
       item.role === AmlRoles.AMALGAMATING &&
-      item.type === AmlTypes.LEAR
+      this.isLearOrBcColin(item)
     )
   }
 
@@ -205,13 +205,15 @@ export default class BusinessTable extends Mixins(AmalgamationMixin) {
   }
 
   name (item: AmalgamatingBusinessIF): string {
-    if (item?.type === AmlTypes.LEAR) return item.name
+    if (item?.type === AmlTypes.LEAR || item?.type === AmlTypes.COLIN) return item.name
     if (item?.type === AmlTypes.FOREIGN) return item.legalName
     return '(Unknown)' // should never happen
   }
 
   type (item: AmalgamatingBusinessIF): string {
-    if (item?.type === AmlTypes.LEAR) return GetCorpFullDescription(item.legalType)
+    if (item?.type === AmlTypes.LEAR || item?.type === AmlTypes.COLIN) {
+      return GetCorpFullDescription(item.legalType)
+    }
     if (item?.type === AmlTypes.FOREIGN) {
       return item.identifier?.startsWith('A') ? 'Extra Provincial' : 'Foreign'
     }
@@ -219,11 +221,23 @@ export default class BusinessTable extends Mixins(AmalgamationMixin) {
   }
 
   registeredOfficeMailingAddress (item: AmalgamatingBusinessIF): AddressIF {
-    if (item?.type === AmlTypes.LEAR) return item.addresses?.registeredOffice?.mailingAddress
+    if (item?.type === AmlTypes.LEAR || item?.type === AmlTypes.COLIN) {
+      return item.addresses?.registeredOffice?.mailingAddress
+    }
     return null // should never happen
   }
 
   jurisdiction (item: AmalgamatingBusinessIF): string {
+    // extrapro COLIN rows carry the resolved home jurisdiction string from the COLIN snapshot
+    // ('BC' | province code | 'FD' | free text)
+    if (item?.type === AmlTypes.COLIN) {
+      const j = item.jurisdiction
+      if (!j) return '(Unknown)' // should never happen
+      if (j === 'FD') return 'Federal, Canada'
+      if (/^[A-Z]{2}$/.test(j)) return `${j}, Canada`
+      return j
+    }
+
     const fj = (item?.type === AmlTypes.FOREIGN) && item.foreignJurisdiction
     if (fj?.country) {
       const country = getName(fj.country)
@@ -283,7 +297,7 @@ export default class BusinessTable extends Mixins(AmalgamationMixin) {
     }
     & th:last-of-type {
       padding-right: 2rem;
-      width: 120px;
+      width: 150px;
     }
   }
 
@@ -318,10 +332,12 @@ export default class BusinessTable extends Mixins(AmalgamationMixin) {
       max-width: 45px;
     }
     & td.business-actions {
-      width: 120px;
-      max-width: 120px;
+      width: 150px;
+      max-width: 150px;
       text-align: right;
       padding-right: 0.4rem;
+      // keep the Remove button and the more-actions button on one line
+      white-space: nowrap;
 
       // nudge icon down a bit to line up with text
       .remove-btn .v-icon {

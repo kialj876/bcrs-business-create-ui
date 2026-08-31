@@ -315,6 +315,8 @@ export default class Actions extends Mixins(
         if (holdingPrimary) await this.updatePrepopulatedData(holdingPrimary)
       } catch (error) {
         console.log('Error validating table in onClickFilePay(): ', error) // eslint-disable-line no-console
+        // let the user know the submission didn't proceed
+        this.$root.$emit('save-error-event', error)
         this.setIsFilingPaying(false)
         return
       }

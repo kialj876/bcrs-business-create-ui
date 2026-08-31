@@ -9,4 +9,5 @@ export enum RuleIds {
   NUM_PARTNERS = 6,
   NUM_APPLICANT_PERSON = 7,
   NUM_APPLICANT_ORG = 8,
+  COMPLETE_DIRECTOR_INFO = 9,
 }

@@ -3,9 +3,11 @@ import { Action, Getter } from 'pinia-class'
 import { useStore } from '@/store/store'
 import { AmlRoles, AmlStatuses, AmlTypes, AuthorizedActions, EntityStates, FilingStatus, RestorationTypes,
   RoleTypes } from '@/enums'
-import { AmalgamatingBusinessIF, ContactPointIF, EmptyContactPoint, EmptyNameRequest, NameRequestIF,
-  NameTranslationIF, OrgPersonIF, PeopleAndRoleIF, RegisteredRecordsAddressesIF, ResourceIF, ShareClassIF,
+import { AmalgamatingBusinessIF, AmalgamatingColinIF, AmalgamatingForeignIF, AmalgamatingLearIF,
+  ColinSnapshotIF, ContactPointIF, EmptyContactPoint, EmptyNameRequest, NameRequestIF, NameTranslationIF,
+  OrgPersonIF, PeopleAndRoleIF, RegisteredRecordsAddressesIF, ResourceIF, ShareClassIF,
   ResolutionIF } from '@/interfaces'
+import { StatusCodes } from 'http-status-codes'
 import { CorrectNameOptions } from '@bcrs-shared-components/enums/'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 import { AuthServices, LegalServices } from '@/services'
@@ -63,10 +65,26 @@ export default class AmalgamationMixin extends Vue {
     this.foreignHorizontal
   ]
 
+  /** True for foreign businesses and for COLIN businesses that are extraprovincial. */
+  isForeignOrXproColin (business: AmalgamatingBusinessIF): business is (AmalgamatingForeignIF | AmalgamatingColinIF) {
+    return (
+      business.type === AmlTypes.FOREIGN ||
+      (business.type === AmlTypes.COLIN && business.legalType === CorpTypeCd.EXTRA_PRO_A)
+    )
+  }
+
+  /** True for LEAR businesses and for COLIN businesses that are not extraprovincial. */
+  isLearOrBcColin (business: AmalgamatingBusinessIF): business is (AmalgamatingLearIF | AmalgamatingColinIF) {
+    return (
+      business.type === AmlTypes.LEAR ||
+      (business.type === AmlTypes.COLIN && business.legalType !== CorpTypeCd.EXTRA_PRO_A)
+    )
+  }
+
   /** If we don't have addresses, assume business is not affiliated (except if authorized). */
   notAffiliated (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       !business.addresses &&
       !IsAuthorized(AuthorizedActions.AML_OVERRIDES)
     ) {
@@ -80,7 +98,7 @@ export default class AmalgamationMixin extends Vue {
    * (Could happen if it was added while active and is now historical.)
    */
   notHistorical (business: AmalgamatingBusinessIF): AmlStatuses {
-    if (business.type === AmlTypes.LEAR && business.isHistorical) {
+    if (this.isLearOrBcColin(business) && business.isHistorical) {
       return AmlStatuses.ERROR_HISTORICAL
     }
     return null
@@ -88,7 +106,7 @@ export default class AmalgamationMixin extends Vue {
 
   /** Disallow frozen business. */
   notFrozen (business: AmalgamatingBusinessIF): AmlStatuses {
-    if (business.type === AmlTypes.LEAR && business.isFrozen) {
+    if (this.isLearOrBcColin(business) && business.isFrozen) {
       return AmlStatuses.ERROR_FROZEN
     }
     return null
@@ -97,7 +115,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow if NIGS (except if authorized). */
   notInGoodStanding (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       business.isNotInGoodStanding &&
       !IsAuthorized(AuthorizedActions.AML_OVERRIDES)
     ) {
@@ -120,7 +138,7 @@ export default class AmalgamationMixin extends Vue {
 
   /** Disallow if a future effective filing exists. */
   futureEffectiveFiling (business: AmalgamatingBusinessIF): AmlStatuses {
-    if (business.type === AmlTypes.LEAR && business.isFutureEffective) {
+    if (this.isLearOrBcColin(business) && business.isFutureEffective) {
       return AmlStatuses.ERROR_FUTURE_EFFECTIVE_FILING
     }
     return null
@@ -148,7 +166,7 @@ export default class AmalgamationMixin extends Vue {
    */
   foreign (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.FOREIGN &&
+      this.isForeignOrXproColin(business) &&
       !IsAuthorized(AuthorizedActions.AML_OVERRIDES)
     ) {
       return AmlStatuses.ERROR_FOREIGN
@@ -159,7 +177,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow if foreign and there is also a BC company, into ULC/CUL. */
   foreignUnlimited (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.FOREIGN &&
+      this.isForeignOrXproColin(business) &&
       this.isAnyBcCompany &&
       (this.isEntityBcUlcCompany || this.isEntityUlcContinueIn)
     ) {
@@ -171,7 +189,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow CC/CCC mismatch. */
   cccMismatch (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (business.legalType === CorpTypeCd.BC_CCC || business.legalType === CorpTypeCd.CCC_CONTINUE_IN) &&
       (!this.isEntityBcCcc && !this.isEntityCccContinueIn)
     ) {
@@ -183,7 +201,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow if BC/C and there is also a foreign, into ULC/CUL. */
   foreignUnlimited2 (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (business.legalType === CorpTypeCd.BC_COMPANY || business.legalType === CorpTypeCd.CONTINUE_IN) &&
       this.isAnyForeign &&
       (this.isEntityBcUlcCompany || this.isEntityUlcContinueIn)
@@ -196,7 +214,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow extrapro (A company) into ULC/CC/CUL/CCC. */
   xproUlcCcc (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.FOREIGN &&
+      this.isForeignOrXproColin(business) &&
       (
         this.isEntityBcUlcCompany || this.isEntityBcCcc ||
         this.isEntityUlcContinueIn || this.isEntityCccContinueIn
@@ -210,7 +228,7 @@ export default class AmalgamationMixin extends Vue {
   /** Disallow if ULC/CUL and there is also a foreign. */
   foreignUnlimited3 (business: AmalgamatingBusinessIF): AmlStatuses {
     if (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (business.legalType === CorpTypeCd.BC_ULC_COMPANY || business.legalType === CorpTypeCd.ULC_CONTINUE_IN) &&
       this.isAnyForeign
     ) {
@@ -229,7 +247,7 @@ export default class AmalgamationMixin extends Vue {
 
   /** Disallow if foreign in a short-form horizontal amalgamation. */
   foreignHorizontal (business: AmalgamatingBusinessIF): AmlStatuses {
-    if (business.type === AmlTypes.FOREIGN && this.isAmalgamationFilingHorizontal) {
+    if (this.isForeignOrXproColin(business) && this.isAmalgamationFilingHorizontal) {
       return AmlStatuses.ERROR_FOREIGN_HORIZONTAL
     }
     return null
@@ -261,6 +279,71 @@ export default class AmalgamationMixin extends Vue {
       ]).then(results => results.map((result: any) => result.value || null))
 
     return { authInfo, businessInfo, addresses, firstTask, firstFiling }
+  }
+
+  /**
+   * Fetches the auth info and COLIN snapshot of a business not (yet) managed in LEAR.
+   * @param identifier The business identifier.
+   * @param includeAuthInfo Whether to fetch the auth info (not applicable to extrapro businesses).
+   * @returns An object with the auth info (may be null), the snapshot (null on failure) and
+   *          the snapshot's HTTP status code (null if the failure wasn't an HTTP error).
+   */
+  async fetchColinBusinessInfo (identifier: string, includeAuthInfo = true):
+    Promise<{ authInfo: any, snapshot: ColinSnapshotIF, snapshotStatus: number }> {
+    const [ authInfoResult, snapshotResult ] = await Promise.allSettled([
+      includeAuthInfo ? AuthServices.fetchAuthInfo(identifier) : Promise.resolve(null),
+      LegalServices.fetchColinSnapshot(identifier)
+    ])
+
+    const authInfo = (authInfoResult.status === 'fulfilled') ? authInfoResult.value : null
+    const snapshot = (snapshotResult.status === 'fulfilled') ? snapshotResult.value : null
+    const snapshotStatus = (snapshotResult.status === 'fulfilled')
+      ? StatusCodes.OK
+      : ((snapshotResult.reason as any)?.response?.status || null)
+
+    return { authInfo, snapshot, snapshotStatus }
+  }
+
+  /** Returns the org-person (director) list from a COLIN snapshot. */
+  colinOrgPersons (snapshot: ColinSnapshotIF): OrgPersonIF[] {
+    return (snapshot.parties || [])
+      .filter(party => party.roles?.some(role => role.roleType === RoleTypes.DIRECTOR))
+      .map(party => {
+        // NB - untyped copy: the wire officer carries "middleInitial", the org-person "middleName"
+        const officer: any = { ...party.officer }
+
+        // WORK-AROUND WARNING !!!
+        // convert officer from "middleInitial" to "middleName" (same as fetchDirectors)
+        const middleInitial = officer['middleInitial']
+        if (middleInitial !== undefined) {
+          officer.middleName = middleInitial
+          delete officer['middleInitial']
+        }
+        return {
+          deliveryAddress: party.deliveryAddress,
+          mailingAddress: party.mailingAddress,
+          officer,
+          roles: party.roles
+        } as OrgPersonIF
+      })
+  }
+
+  /** Returns the share classes (and series) from a COLIN snapshot, with types applied. */
+  colinShareClasses (snapshot: ColinSnapshotIF): ShareClassIF[] {
+    const shareClasses = (snapshot.shareClasses || [])
+
+    // apply a type to share classes and series (same as fetchShareStructure)
+    shareClasses.forEach(shareClass => {
+      shareClass.type = 'Class'
+      shareClass.series?.forEach(shareSeries => { shareSeries.type = 'Series' })
+    })
+
+    return shareClasses
+  }
+
+  /** Returns the resolutions from a COLIN snapshot. */
+  colinResolutions (snapshot: ColinSnapshotIF): ResolutionIF[] {
+    return (snapshot.resolutions || []) as ResolutionIF[]
   }
 
   /**
@@ -345,20 +428,37 @@ export default class AmalgamationMixin extends Vue {
           legalName: item.legalName,
           foreignJurisdiction: item.foreignJurisdiction
         } as AmalgamatingBusinessIF
-      } else {
-        const business = await this.fetchAmalgamatingBusinessInfo(item.identifier)
+      }
 
-        // if auth info is empty then business is not (no longer) affiliated with current account
-        if (!business.authInfo) {
+      // extrapro COLIN businesses re-fetch from the snapshot only (no LEAR attempt, no auth info)
+      if (item.type === AmlTypes.COLIN && item.legalType === CorpTypeCd.EXTRA_PRO_A) {
+        const { snapshot } = await this.fetchColinBusinessInfo(item.identifier, false)
+        if (snapshot) {
           return {
-            type: AmlTypes.LEAR,
+            type: AmlTypes.COLIN,
             role: item.role,
-            identifier: item.identifier,
-            name: item.name,
-            legalType: item.legalType
+            identifier: snapshot.business.identifier,
+            name: snapshot.business.legalName,
+            legalType: CorpTypeCd.EXTRA_PRO_A,
+            jurisdiction: snapshot.business.jurisdiction
           } as AmalgamatingBusinessIF
         }
+        // on failure, keep a minimal row so the rules still evaluate
+        return {
+          type: AmlTypes.COLIN,
+          role: item.role,
+          identifier: item.identifier,
+          name: item.name,
+          legalType: item.legalType,
+          jurisdiction: item.jurisdiction
+        } as AmalgamatingBusinessIF
+      }
 
+      const business = await this.fetchAmalgamatingBusinessInfo(item.identifier)
+
+      // if the business is in LEAR, build the full LEAR row
+      // (this also upgrades a COLIN row whose business has since been migrated into LEAR)
+      if (business.businessInfo) {
         return {
           type: AmlTypes.LEAR,
           role: item.role, // amalgamating or holding
@@ -376,6 +476,47 @@ export default class AmalgamationMixin extends Vue {
           isHistorical: (business.businessInfo.state === EntityStates.HISTORICAL)
         } as AmalgamatingBusinessIF
       }
+
+      // if auth info is empty or errored then business is not (no longer) affiliated with current account
+      // NB - COLIN rows fall through and let the snapshot decide instead, since staff can amalgamate
+      //      unaffiliated COLIN businesses (mirrors how the business was added in the first place)
+      if ((item.type !== AmlTypes.COLIN) && (!business.authInfo || business.authInfo.status)) {
+        return {
+          type: AmlTypes.LEAR,
+          role: item.role,
+          identifier: item.identifier,
+          name: item.name,
+          legalType: item.legalType
+        } as AmalgamatingBusinessIF
+      }
+
+      // not in LEAR - this is a COLIN business
+      // (the snapshot 401s for a regular user who is not affiliated, leaving the minimal row below)
+      const { snapshot } = await this.fetchColinBusinessInfo(item.identifier)
+      if (snapshot) {
+        return {
+          type: AmlTypes.COLIN,
+          role: item.role,
+          identifier: snapshot.business.identifier,
+          name: snapshot.business.legalName,
+          legalType: snapshot.business.legalType as CorpTypeCd,
+          authInfo: business.authInfo?.status ? undefined : business.authInfo,
+          addresses: snapshot.offices,
+          isNotInGoodStanding: (snapshot.business.goodStanding !== true),
+          isFrozen: (snapshot.business.adminFreeze === true),
+          isFutureEffective: (snapshot.business.hasFutureEffectiveFiling === true),
+          isHistorical: (snapshot.business.state === EntityStates.HISTORICAL)
+        } as AmalgamatingBusinessIF
+      }
+
+      // snapshot failed - keep a minimal COLIN row (the server re-validates at submission)
+      return {
+        type: AmlTypes.COLIN,
+        role: item.role,
+        identifier: item.identifier,
+        name: item.name,
+        legalType: item.legalType
+      } as AmalgamatingBusinessIF
     }
 
     const promises = this.getAmalgamatingBusinesses.map(fetchTingInfo)
@@ -395,24 +536,49 @@ export default class AmalgamationMixin extends Vue {
    */
   async updatePrepopulatedData (business: AmalgamatingBusinessIF, isNew = false): Promise<void> {
     // safety checks
-    if (!business || business.type !== AmlTypes.LEAR) throw new Error('Invalid business')
+    if (!business || (business.type !== AmlTypes.LEAR && business.type !== AmlTypes.COLIN)) {
+      throw new Error('Invalid business')
+    }
     if (!business.addresses) throw new Error('Missing business addresses')
-    if (!business.authInfo) throw new Error('Missing share classes')
+    if (business.type === AmlTypes.LEAR && !business.authInfo) throw new Error('Missing auth info')
 
-    // first, fetch directors and share structure
-    // NB - addresses and auth info have already been fetched (and checked above)
-    // NB - make all API calls concurrently without rejection
-    // NB - if any call failed, that item will be null
-    const [ directors, shareStructure, resolutions ] =
-      await Promise.allSettled([
-        LegalServices.fetchDirectors(business.identifier),
-        LegalServices.fetchShareStructure(business.identifier),
-        LegalServices.fetchResolutions(business.identifier)
-      ]).then(results => results.map((result: any) => result.value || null))
+    let directors: OrgPersonIF[]
+    let shareClasses: ShareClassIF[]
+    let resolutions: ResolutionIF[]
 
-    // check for errors before changing anything
-    if (!directors) throw new Error('Unable to fetch directors')
-    if (!shareStructure) throw new Error('Unable to fetch share structure')
+    if (business.type === AmlTypes.COLIN) {
+      // fetch everything from the COLIN snapshot
+      const { snapshot } = await this.fetchColinBusinessInfo(business.identifier)
+
+      // check for errors before changing anything
+      if (!snapshot) throw new Error('Unable to fetch COLIN snapshot')
+
+      directors = this.colinOrgPersons(snapshot)
+      shareClasses = this.colinShareClasses(snapshot)
+      resolutions = this.colinResolutions(snapshot)
+
+      // refresh the addresses from the snapshot (source of truth)
+      business.addresses = snapshot.offices
+    } else {
+      // first, fetch directors and share structure
+      // NB - addresses and auth info have already been fetched (and checked above)
+      // NB - make all API calls concurrently without rejection
+      // NB - if any call failed, that item will be null
+      const [ fetchedDirectors, shareStructure, fetchedResolutions ] =
+        await Promise.allSettled([
+          LegalServices.fetchDirectors(business.identifier),
+          LegalServices.fetchShareStructure(business.identifier),
+          LegalServices.fetchResolutions(business.identifier)
+        ]).then(results => results.map((result: any) => result.value || null))
+
+      // check for errors before changing anything
+      if (!fetchedDirectors) throw new Error('Unable to fetch directors')
+      if (!shareStructure) throw new Error('Unable to fetch share structure')
+
+      directors = fetchedDirectors
+      shareClasses = shareStructure.shareClasses
+      resolutions = fetchedResolutions
+    }
 
     // unset previous holding/primary business, if any
     const previous = this.getAmalgamatingBusinesses.find((b: AmalgamatingBusinessIF) =>
@@ -437,7 +603,7 @@ export default class AmalgamationMixin extends Vue {
     else this.setOrgPersonList(directors)
 
     // overwrite share structure
-    this.setShareClasses(shareStructure.shareClasses)
+    this.setShareClasses(shareClasses)
     this.setResolutions(resolutions)
 
     // overwrite business contact -- only when user has marked new holding/primary business,
@@ -485,9 +651,9 @@ export default class AmalgamationMixin extends Vue {
   // (not all are used atm)
   //
 
-  /** True if there a foreign company in the table. */
+  /** True if there a foreign company (incl. an extrapro COLIN company) in the table. */
   get isAnyForeign (): boolean {
-    return this.getAmalgamatingBusinesses.some(business => (business.type === AmlTypes.FOREIGN))
+    return this.getAmalgamatingBusinesses.some(business => this.isForeignOrXproColin(business))
   }
 
   /** True if there a BEN/CBEN in the table. */
@@ -504,7 +670,7 @@ export default class AmalgamationMixin extends Vue {
   /** True if there is a CC/CCC in the table. */
   get isAnyCcc (): boolean {
     return this.getAmalgamatingBusinesses.some(business => (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (
         business.legalType === CorpTypeCd.BC_CCC ||
         business.legalType === CorpTypeCd.CCC_CONTINUE_IN
@@ -515,7 +681,7 @@ export default class AmalgamationMixin extends Vue {
   /** True if there is a BC/C in the table. */
   get isAnyLimited (): boolean {
     return this.getAmalgamatingBusinesses.some(business => (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (
         business.legalType === CorpTypeCd.BC_COMPANY ||
         business.legalType === CorpTypeCd.CONTINUE_IN
@@ -526,7 +692,7 @@ export default class AmalgamationMixin extends Vue {
   /** True if there is a ULC/CUL in the table. */
   get isAnyUnlimited (): boolean {
     return this.getAmalgamatingBusinesses.some(business => (
-      business.type === AmlTypes.LEAR &&
+      this.isLearOrBcColin(business) &&
       (
         business.legalType === CorpTypeCd.BC_ULC_COMPANY ||
         business.legalType === CorpTypeCd.ULC_CONTINUE_IN

@@ -285,7 +285,11 @@ import { JurisdictionLocation } from '@bcrs-shared-components/enums'
 import BusinessTable from '@/components/Amalgamation/BusinessTable.vue'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 import { GenericErrorDialog } from '@/dialogs/'
-import { IsAuthorized } from '@/utils'
+import { IsAuthorized, IsFeatureReleased } from '@/utils'
+import { StatusCodes } from 'http-status-codes'
+
+/** Local extension until "modernized" is declared on the shared interface. */
+type ColinAwareLookupResultIF = BusinessLookupResultIF & { modernized?: boolean }
 
 @Component({
   components: {
@@ -421,39 +425,24 @@ export default class AmalgamatingBusinesses extends Mixins(AmalgamationMixin, Co
     // Show spinner since the network calls below can take a few seconds.
     this.$root.$emit('showSpinner', true)
 
-    // Special case to handle Extra Pro A companies
+    // Special case to handle Extra Pro A companies.
+    // These are added as COLIN businesses with data from the COLIN snapshot.
     if ((businessLookup.legalType as any) === CorpTypeCd.EXTRA_PRO_A) {
-      const tingBusiness = {
-        type: AmlTypes.FOREIGN,
-        role: AmlRoles.AMALGAMATING,
-        foreignJurisdiction: {
-          region: JurisdictionLocation.BC,
-          country: JurisdictionLocation.CA
-        },
-        legalName: businessLookup.name,
-        identifier: businessLookup.identifier
-      } as AmalgamatingBusinessIF
-
-      // Check for duplicate
-      if (this.checkForDuplicateInTable(tingBusiness)) {
-        this.snackbarText = 'Business is already in table.'
-        this.snackbar = true
-
-        // Hide spinner.
-        this.$root.$emit('showSpinner', false)
-
-        return
-      }
-
-      this.pushAmalgamatingBusiness(tingBusiness)
-
-      // Close the "Add an Amalgamating Business" panel.
-      this.isAddingAmalgamatingBusiness = false
-
-      // Hide spinner.
-      this.$root.$emit('showSpinner', false)
-
+      await this.saveXproColinBusiness(businessLookup)
       return
+    }
+
+    // Special case to handle BC/ULC/CC companies not yet in LEAR (COLIN businesses).
+    // NB - if the snapshot reports the business is actually in LEAR (404), fall through
+    //      to the regular LEAR flow below.
+    if (
+      IsFeatureReleased('amalgamation-colin-businesses') &&
+      (businessLookup as ColinAwareLookupResultIF).modernized === false &&
+      [CorpTypeCd.BC_COMPANY, CorpTypeCd.BC_ULC_COMPANY, CorpTypeCd.BC_CCC]
+        .includes(businessLookup.legalType as unknown as CorpTypeCd)
+    ) {
+      const handled = await this.saveColinBusiness(businessLookup)
+      if (handled) return
     }
 
     // Get the business information
@@ -544,6 +533,123 @@ export default class AmalgamatingBusinesses extends Mixins(AmalgamationMixin, Co
     }
 
     // Add the new business to the amalgamating businesses list.
+    this.pushAmalgamatingBusiness(tingBusiness)
+
+    // Close the "Add an Amalgamating Business" panel.
+    this.isAddingAmalgamatingBusiness = false
+
+    // Hide spinner.
+    this.$root.$emit('showSpinner', false)
+  }
+
+  /**
+   * Adds a BC/ULC/CC company not yet in LEAR as an amalgamating COLIN business.
+   * @param businessLookup the business lookup result
+   * @returns True if handled here, False to fall through to the LEAR flow (snapshot 404)
+   */
+  private async saveColinBusiness (businessLookup: BusinessLookupResultIF): Promise<boolean> {
+    const { authInfo, snapshot, snapshotStatus } = await this.fetchColinBusinessInfo(businessLookup.identifier)
+
+    let tingBusiness: AmalgamatingBusinessIF
+
+    if (snapshot) {
+      tingBusiness = {
+        type: AmlTypes.COLIN,
+        role: AmlRoles.AMALGAMATING,
+        identifier: snapshot.business.identifier,
+        name: snapshot.business.legalName,
+        legalType: snapshot.business.legalType as CorpTypeCd,
+        authInfo: authInfo?.status ? undefined : authInfo,
+        addresses: snapshot.offices,
+        isNotInGoodStanding: (snapshot.business.goodStanding !== true),
+        isFrozen: (snapshot.business.adminFreeze === true),
+        isFutureEffective: (snapshot.business.hasFutureEffectiveFiling === true),
+        isHistorical: (snapshot.business.state === EntityStates.HISTORICAL)
+      }
+    } else if (snapshotStatus === StatusCodes.UNAUTHORIZED) {
+      // Not affiliated - add a minimal row that the Not Affiliated rule will flag.
+      tingBusiness = {
+        type: AmlTypes.COLIN,
+        role: AmlRoles.AMALGAMATING,
+        identifier: businessLookup.identifier,
+        name: businessLookup.name,
+        legalType: businessLookup.legalType as unknown as CorpTypeCd
+      }
+    } else if (snapshotStatus === StatusCodes.NOT_FOUND) {
+      // Business is managed in LEAR (migrated) or unknown - fall through to the LEAR flow.
+      return false
+    } else {
+      // Report error.
+      console.log('Unable to fetch COLIN snapshot, status =', snapshotStatus)
+      this.showSomethingWentWrongDialog()
+
+      // Hide spinner.
+      this.$root.$emit('showSpinner', false)
+
+      return true
+    }
+
+    this.addTingBusinessToTable(tingBusiness)
+    return true
+  }
+
+  /**
+   * Adds an Extra Pro A company as an amalgamating COLIN business.
+   * NB - no auth info call: extraprovincial companies have no affiliation concept.
+   * @param businessLookup the business lookup result
+   */
+  private async saveXproColinBusiness (businessLookup: BusinessLookupResultIF): Promise<void> {
+    const { snapshot, snapshotStatus } = await this.fetchColinBusinessInfo(businessLookup.identifier, false)
+
+    let tingBusiness: AmalgamatingBusinessIF
+
+    if (snapshot) {
+      // NB - deliberately no gating flags: extra pros keep the foreign rule set
+      tingBusiness = {
+        type: AmlTypes.COLIN,
+        role: AmlRoles.AMALGAMATING,
+        identifier: snapshot.business.identifier,
+        name: snapshot.business.legalName,
+        legalType: CorpTypeCd.EXTRA_PRO_A,
+        jurisdiction: snapshot.business.jurisdiction
+      }
+    } else if (snapshotStatus === StatusCodes.UNAUTHORIZED) {
+      // Non-staff user - add a minimal row that the staff-only (foreign) rule will flag.
+      tingBusiness = {
+        type: AmlTypes.COLIN,
+        role: AmlRoles.AMALGAMATING,
+        identifier: businessLookup.identifier,
+        name: businessLookup.name,
+        legalType: CorpTypeCd.EXTRA_PRO_A
+      }
+    } else {
+      // An extra pro missing from COLIN (404) is a data problem to surface, not paper over.
+      // Report error.
+      console.log('Unable to fetch COLIN snapshot, status =', snapshotStatus)
+      this.showSomethingWentWrongDialog()
+
+      // Hide spinner.
+      this.$root.$emit('showSpinner', false)
+
+      return
+    }
+
+    this.addTingBusinessToTable(tingBusiness)
+  }
+
+  /** Adds the ting business to the table (checking for duplicate) and closes the panel. */
+  private addTingBusinessToTable (tingBusiness: AmalgamatingBusinessIF): void {
+    // Check for duplicate.
+    if (this.checkForDuplicateInTable(tingBusiness)) {
+      this.snackbarText = 'Business is already in table.'
+      this.snackbar = true
+
+      // Hide spinner.
+      this.$root.$emit('showSpinner', false)
+
+      return
+    }
+
     this.pushAmalgamatingBusiness(tingBusiness)
 
     // Close the "Add an Amalgamating Business" panel.

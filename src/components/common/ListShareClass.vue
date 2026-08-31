@@ -6,20 +6,37 @@
         v-if="isSummary && showErrorSummary"
         class="share-summary-invalid-message pa-5"
       >
-        <span>
+        <!--
+          Short-form amalgamations can't edit shares in the filing,
+          so there is messaging instead of a return link
+        -->
+        <div
+          v-if="isShortFormAmalgamation"
+          class="d-flex align-start"
+        >
+          <v-icon
+            color="error"
+            :style="{ 'margin-top': '1px' }"
+          >
+            mdi-information-outline
+          </v-icon>
+          <div class="mx-1">
+            <span class="error-text d-block">The adopted share structure is missing required information.</span>
+            <span class="error-text d-block">Save this draft application and correct the share structure on the
+              {{ isAmalgamationFilingHorizontal ? 'primary' : 'holding' }} business' dashboard,
+              then return to this application.</span>
+          </div>
+        </div>
+
+        <span v-else>
           <v-icon color="error">mdi-information-outline</v-icon>
           <span class="error-text mx-1">This step is unfinished.</span>
 
-          <!--
-            This return link is only for regular amalgamations, since short-form amalgamations adopt
-            their shares from the holding/primary company and therefore can't be in error nor edited.
-          -->
           <router-link
             v-if="isAmalgamationFiling"
             id="router-link"
             :to="{ path: `/${RouteNames.AMALG_REG_SHARE_STRUCTURE}` }"
           >Return to this step to finish it</router-link>
-
           <router-link
             v-if="isContinuationInFiling"
             id="router-link"
@@ -239,6 +256,8 @@
 
 <script lang="ts">
 import { Component, Emit, Prop, Vue } from 'vue-property-decorator'
+import { Getter } from 'pinia-class'
+import { useStore } from '@/store/store'
 import { RouteNames } from '@/enums'
 import { arrayMoveMutable } from 'array-move'
 import { OTHER_CURRENCY } from '@/constants'
@@ -246,6 +265,9 @@ import { FormatDecimal } from '@/utils'
 
 @Component({})
 export default class ListShareClass extends Vue {
+  @Getter(useStore) isAmalgamationFilingHorizontal!: boolean
+  @Getter(useStore) isAmalgamationFilingVertical!: boolean
+
   @Prop({ default: () => [] }) readonly shareClasses!: any
   @Prop({ default: false }) readonly componentDisabled!: boolean
   @Prop({ default: false }) readonly isAmalgamationFiling!: boolean
@@ -256,6 +278,11 @@ export default class ListShareClass extends Vue {
 
   // Enum for template
   readonly RouteNames = RouteNames
+
+  /** Whether this is a short-form (horizontal or vertical) amalgamation filing. */
+  get isShortFormAmalgamation (): boolean {
+    return (this.isAmalgamationFilingHorizontal || this.isAmalgamationFilingVertical)
+  }
 
   get headers (): Array<any> {
     const headers = [

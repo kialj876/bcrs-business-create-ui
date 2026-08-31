@@ -1,5 +1,6 @@
 import { AmalgamationResourceIF } from '@/interfaces'
 import { FilingCodes, RuleIds } from '@/enums'
+import { AreOrgPersonsComplete } from '@/utils'
 import { AmalgamationShortSteps } from './steps'
 import { CorpTypeCd, GetCorpFullDescription } from '@bcrs-shared-components/corp-type-module'
 import { ResourcePhrases } from '../ResourcePhrases'
@@ -24,12 +25,18 @@ export const AmalgamationShortResourceBen: AmalgamationResourceIF = {
     blurb: 'Add the Completing Party to this application',
     helpSection: null,
     addPerson: false,
-    showDirectors: false,
+    showDirectors: true,
+    readonlyDirectors: true,
     rules: [
       {
         id: RuleIds.NUM_COMPLETING_PARTY,
         text: 'The Completing Party',
         test: (num) => { return (num === 1) }
+      },
+      {
+        id: RuleIds.COMPLETE_DIRECTOR_INFO,
+        text: 'Complete Director information',
+        test: (directors) => AreOrgPersonsComplete(directors)
       }
     ]
   },

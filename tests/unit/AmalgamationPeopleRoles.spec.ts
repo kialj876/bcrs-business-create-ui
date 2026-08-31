@@ -1,6 +1,7 @@
 import { shallowWrapperFactory } from '../vitest-wrapper-factory'
 import { AmalgamationPeopleRoles } from '@/views'
 import { AmalgamationRegResources, AmalgamationShortResources } from '@/resources/'
+import MessageBox from '@/components/common/MessageBox.vue'
 import PeopleAndRoles from '@/components/common/PeopleAndRoles.vue'
 import { AmalgamationTypes, FilingTypes } from '@bcrs-shared-components/enums'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
@@ -74,6 +75,10 @@ for (const test of amalgamationBusinessInfo) {
       expect(wrapper.find('header h2').text()).toBe('1. Add People to your Application')
       expect(wrapper.findComponent(PeopleAndRoles).exists()).toBe(true)
     })
+
+    it('does not display the adopted-directors message box', () => {
+      expect(wrapper.findComponent(MessageBox).exists()).toBe(false)
+    })
   })
 
   /**
@@ -111,6 +116,10 @@ for (const test of amalgamationBusinessInfo) {
     it('displays the header and renders the People and Roles component correctly', () => {
       expect(wrapper.find('header h2').text()).toBe('1. Add People to your Application')
       expect(wrapper.findComponent(PeopleAndRoles).exists()).toBe(true)
+    })
+
+    it('displays the adopted-directors message box', () => {
+      expect(wrapper.findComponent(MessageBox).exists()).toBe(true)
     })
   })
 }

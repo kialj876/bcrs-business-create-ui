@@ -106,6 +106,36 @@ describe('Business Table Summary', () => {
       },
       expectedJurisdiction: 'United States of America',
       role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'COLIN amalgamating business',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'BC5555555',
+      name: 'Test Colin Business',
+      authInfo: { contacts: [ { email: 'bc5555555@example.com' } ] },
+      addresses: {
+        registeredOffice: {
+          mailingAddress: {
+            streetAddress: '123 Colin St',
+            addressCity: 'Victoria',
+            addressCountry: 'CA',
+            postalCode: 'V8V 8V8'
+          }
+        }
+      },
+      role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'extrapro COLIN amalgamating business',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'A1234567',
+      name: 'Test Extrapro Colin Business',
+      legalType: 'A',
+      jurisdiction: 'ON',
+      expectedJurisdiction: 'ON, Canada',
+      role: AmlRoles.AMALGAMATING
     }
   ]
 
@@ -167,6 +197,22 @@ describe('Business Table Summary', () => {
       if ((business.type === AmlTypes.FOREIGN)) {
         expect(td.at(0).text()).toBe(business.legalName)
         expect(td.at(1).text()).toBe(business.expectedJurisdiction)
+        expect(td.at(2).text()).toBe('Amalgamating Business')
+      }
+
+      if ((business.type === AmlTypes.COLIN)) {
+        expect(td.at(0).text()).toContain(business.name)
+
+        if (business.legalType === 'A') {
+          // extrapro COLIN rows show the home jurisdiction and no email
+          expect(td.at(0).text()).not.toContain('@')
+          expect(td.at(1).text()).toBe(business.expectedJurisdiction)
+        } else {
+          expect(td.at(0).text()).toContain(business.authInfo.contacts[0].email)
+          expect(td.at(1).text()).toContain(business.addresses.registeredOffice.mailingAddress.streetAddress)
+          expect(td.at(1).text()).toContain('Canada')
+        }
+
         expect(td.at(2).text()).toBe('Amalgamating Business')
       }
 

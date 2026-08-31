@@ -263,4 +263,49 @@ describe('People And Roles component - Amalgamation Short form', () => {
     wrapper.destroy()
     resetStore()
   })
+
+  const completeDirector: any = {
+    officer: { firstName: 'JANE', lastName: 'DOE', organizationName: '', partyType: 'person' },
+    roles: [{ roleType: 'Director', appointmentDate: '2020-03-30' }],
+    mailingAddress: {
+      streetAddress: '123 Fake Street',
+      streetAddressAdditional: '',
+      addressCity: 'Victoria',
+      addressRegion: 'BC',
+      postalCode: 'V8Z 5C6',
+      addressCountry: 'CA'
+    },
+    deliveryAddress: {
+      streetAddress: '123 Fake Street',
+      streetAddressAdditional: '',
+      addressCity: 'Victoria',
+      addressRegion: 'BC',
+      postalCode: 'V8Z 5C6',
+      addressCountry: 'CA'
+    }
+  }
+
+  it('shows the director info checklist item with a check mark when directors are complete', () => {
+    store.stateModel.addPeopleAndRoleStep.orgPeople = [completeDirector]
+    const wrapper = wrapperFactory()
+    const ruleTexts = wrapper.findAll('.rule-item-txt').wrappers.map(w => w.text())
+    expect(ruleTexts).toContain('Complete Director information')
+    expect(wrapper.find('.dir-info-valid').exists()).toBe(true)
+    expect(wrapper.find('.dir-info-invalid').exists()).toBe(false)
+    wrapper.destroy()
+    resetStore()
+  })
+
+  it('shows an error icon for incomplete director info when errors are shown', () => {
+    store.stateModel.showErrors = true
+    store.stateModel.addPeopleAndRoleStep.orgPeople = [
+      { ...completeDirector, officer: { ...completeDirector.officer, firstName: '' } }
+    ]
+    const wrapper = wrapperFactory()
+    expect(wrapper.find('.dir-info-valid').exists()).toBe(false)
+    expect(wrapper.find('.dir-info-invalid').exists()).toBe(true)
+    wrapper.destroy()
+    store.stateModel.showErrors = false
+    resetStore()
+  })
 })

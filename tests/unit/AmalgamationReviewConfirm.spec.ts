@@ -301,3 +301,57 @@ describe('Amalgamation Review Confirm — "Other" currency notice', () => {
     wrapper.destroy()
   })
 })
+
+describe('Amalgamation Review Confirm — short-form error highlighting', () => {
+  const buildWrapper = (stateOverrides: any) => shallowWrapperFactory(
+    AmalgamationReviewConfirm,
+    null,
+    {
+      amalgamation: { type: AmalgamationTypes.VERTICAL },
+      entityType: 'BC',
+      tombstone: {
+        filingType: FilingTypes.AMALGAMATION_APPLICATION,
+        authorizedActions: []
+      },
+      ...stateOverrides
+    },
+    null,
+    null
+  )
+
+  it('flags an incomplete adopted share structure', () => {
+    const wrapper = buildWrapper({ createShareStructureStep: { valid: false, shareClasses: [] } })
+    expect(wrapper.vm.showErrorSummary).toBe(true)
+    wrapper.destroy()
+  })
+
+  it('accepts a complete adopted share structure (step validity is not used)', () => {
+    const wrapper = buildWrapper({
+      createShareStructureStep: {
+        valid: false,
+        shareClasses: [{ name: 'Class A', hasMaximumShares: false, hasParValue: false, series: [] }]
+      }
+    })
+    expect(wrapper.vm.showErrorSummary).toBe(false)
+    wrapper.destroy()
+  })
+
+  it('shows the unfinished-step message when the amalgamating businesses table is invalid', () => {
+    const wrapper = buildWrapper({
+      amalgamation: { type: AmalgamationTypes.VERTICAL, amalgamatingBusinessesValid: false }
+    })
+    const message = wrapper.find('.amalgamating-businesses-invalid-message')
+    expect(message.exists()).toBe(true)
+    expect(message.text()).toContain('This step is unfinished.')
+    expect(message.text()).toContain('Return to this step to finish it')
+    wrapper.destroy()
+  })
+
+  it('hides the message when the amalgamating businesses table is valid', () => {
+    const wrapper = buildWrapper({
+      amalgamation: { type: AmalgamationTypes.VERTICAL, amalgamatingBusinessesValid: true }
+    })
+    expect(wrapper.find('.amalgamating-businesses-invalid-message').exists()).toBe(false)
+    wrapper.destroy()
+  })
+})

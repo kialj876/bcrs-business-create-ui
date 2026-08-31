@@ -168,7 +168,11 @@
               class="actions-column"
               :class="{'disabled':disabled}"
             >
-              <div class="float-right">
+              <!-- no actions on read-only (adopted director) rows -->
+              <div
+                v-if="!isReadonlyRow(orgPerson)"
+                class="float-right"
+              >
                 <span class="edit-action">
                   <v-btn
                     :id="`officer-${index1}-change-btn`"
@@ -249,9 +253,11 @@ export default class ListPeopleAndRoles extends Mixins(CommonMixin) {
   @Prop({ default: true }) readonly showRolesColumn!: boolean
   @Prop({ default: false }) readonly showEmailColumn!: boolean
   @Prop({ default: true }) readonly showDirectors!: boolean
+  @Prop({ default: false }) readonly readonlyDirectors!: boolean
 
   @Getter(useStore) getAddPeopleAndRoleStep!: PeopleAndRoleIF
   @Getter(useStore) getShowErrors!: boolean
+  @Getter(useStore) isAddPeopleAndRolesValid!: boolean
   @Getter(useStore) isAmalgamationFilingHorizontal!: boolean
   @Getter(useStore) isAmalgamationFilingRegular!: boolean
   @Getter(useStore) isAmalgamationFilingVertical!: boolean
@@ -289,7 +295,8 @@ export default class ListPeopleAndRoles extends Mixins(CommonMixin) {
 
   /** True if error summary should be shown. */
   get showErrorSummary (): boolean {
-    return (this.getShowErrors && !this.getAddPeopleAndRoleStep.valid)
+    // NB - the store getter also verifies each org-person's completeness
+    return (this.getShowErrors && !this.isAddPeopleAndRolesValid)
   }
 
   /** Returns true if org-person is a person. */
@@ -305,6 +312,11 @@ export default class ListPeopleAndRoles extends Mixins(CommonMixin) {
   /** Returns true if specified org/person is a director. */
   isDirector (orgPerson: OrgPersonIF): boolean {
     return orgPerson?.roles.some(role => role.roleType === RoleTypes.DIRECTOR)
+  }
+
+  /** Returns true if specified org/person's row is read-only (an adopted director). */
+  isReadonlyRow (orgPerson: OrgPersonIF): boolean {
+    return (this.readonlyDirectors && this.isDirector(orgPerson))
   }
 
   /** Returns true if specified org/person is a proprietor. */

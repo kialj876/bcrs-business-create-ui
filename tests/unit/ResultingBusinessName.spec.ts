@@ -27,6 +27,8 @@ describe('Resulting Business Name component', () => {
   })
 
   const FOREIGN = { type: AmlTypes.FOREIGN }
+  const COLIN_BC = { type: AmlTypes.COLIN, legalType: CorpTypeCd.BC_COMPANY }
+  const XPRO_COLIN = { type: AmlTypes.COLIN, legalType: CorpTypeCd.EXTRA_PRO_A }
   const BC = { type: AmlTypes.LEAR, legalType: CorpTypeCd.BC_COMPANY }
   const BEN = { type: AmlTypes.LEAR, legalType: CorpTypeCd.BENEFIT_COMPANY }
   const C = { type: AmlTypes.LEAR, legalType: CorpTypeCd.CONTINUE_IN }
@@ -80,6 +82,11 @@ describe('Resulting Business Name component', () => {
       entityType: CorpTypeCd.BC_ULC_COMPANY,
       amalgamatingBusinesses: [ BC, BEN, C, CBEN, CC, CCC, CUL, ULC ],
       computed: [ CUL, ULC ]
+    },
+    { // variation 9 - COLIN businesses are candidates; extrapro COLIN and foreign are not
+      entityType: CorpTypeCd.BC_COMPANY,
+      amalgamatingBusinesses: [ COLIN_BC, XPRO_COLIN, FOREIGN, BC ],
+      computed: [ COLIN_BC, BC ]
     }
   ]
 

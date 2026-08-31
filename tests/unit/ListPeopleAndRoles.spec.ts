@@ -2,7 +2,7 @@ import { wrapperFactory, shallowWrapperFactory } from '../vitest-wrapper-factory
 import { createPinia, setActivePinia } from 'pinia'
 import { useStore } from '@/store/store'
 import ListPeopleAndRoles from '@/components/common/ListPeopleAndRoles.vue'
-import { FilingTypes } from '@/enums'
+import { AmalgamationTypes, FilingTypes } from '@/enums'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 setActivePinia(createPinia())
@@ -571,5 +571,57 @@ describe('List People And Roles component - Short form amalgamation', () => {
     expect(wrapper.findAll('.people-roles-content').length).toEqual(2)
     expect(wrapper.find('.people-roles-header').exists()).toBe(true)
     expect(wrapper.find('.people-roles-content').exists()).toBe(true)
+  })
+
+  it('locks director rows but not the completing party when readonlyDirectors is set', () => {
+    wrapper = shallowWrapperFactory(
+      ListPeopleAndRoles,
+      { readonlyDirectors: true },
+      { addPeopleAndRoleStep: { orgPeople: mockPersonList } }
+    )
+
+    const rows = wrapper.findAll('.people-roles-content')
+    expect(rows.length).toBe(2)
+    // completing party row keeps its actions
+    expect(rows.at(0).find('.edit-action').exists()).toBe(true)
+    // director row is read-only
+    expect(rows.at(1).find('.edit-action').exists()).toBe(false)
+    expect(rows.at(1).find('.more-actions-btn').exists()).toBe(false)
+  })
+
+  it('keeps actions on director rows when readonlyDirectors is not set', () => {
+    wrapper = shallowWrapperFactory(
+      ListPeopleAndRoles,
+      null,
+      { addPeopleAndRoleStep: { orgPeople: mockPersonList } }
+    )
+
+    const rows = wrapper.findAll('.people-roles-content')
+    expect(rows.at(0).find('.edit-action').exists()).toBe(true)
+    expect(rows.at(1).find('.edit-action').exists()).toBe(true)
+  })
+
+  it('shows the error box when adopted director data is incomplete', () => {
+    store.stateModel.amalgamation.type = AmalgamationTypes.VERTICAL
+
+    wrapper = shallowWrapperFactory(
+      ListPeopleAndRoles,
+      { isSummary: true },
+      {
+        // the director is missing their delivery address, so the step getter reports invalid
+        // even though the step's stored validity is true
+        addPeopleAndRoleStep: {
+          valid: true,
+          orgPeople: [{ ...mockPersonList[1], deliveryAddress: null }]
+        },
+        showErrors: true
+      }
+    )
+
+    const message = wrapper.vm.$el.querySelector('.people-roles-invalid-message').textContent
+    expect(message).toContain('This step is unfinished.')
+    expect(message).toContain('Return to this step to finish it')
+
+    store.stateModel.amalgamation.type = null
   })
 })

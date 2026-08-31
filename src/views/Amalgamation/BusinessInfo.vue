@@ -41,6 +41,7 @@
         <v-card
           flat
           class="mt-6"
+          :class="{ 'invalid-section': getShowErrors && !officesComplete }"
         >
           <CardHeader label="Addresses" />
           <article class="section-container">
@@ -101,6 +102,7 @@ import { useStore } from '@/store/store'
 import { AddressIF, ContactPointIF, RegisteredRecordsAddressesIF } from '@/interfaces'
 import { CommonMixin } from '@/mixins'
 import { RouteNames } from '@/enums'
+import { AreOfficesComplete } from '@/utils'
 import BusinessContactInfo from '@/components/common/BusinessContactInfo.vue'
 import FolioNumber from '@/components/common/FolioNumber.vue'
 import OfficeAddresses from '@/components/common/OfficeAddresses.vue'
@@ -142,9 +144,14 @@ export default class AmalgamationBusinessInfo extends Mixins(CommonMixin) {
   /** Object of valid flags. Must match validComponents. */
   get validFlags (): object {
     return {
-      validAddressForm: this.addressFormValid,
+      validAddressForm: this.addressFormValid && this.officesComplete,
       validBusinessContactForm: this.businessContactFormValid
     }
+  }
+
+  /** Whether the office addresses are complete and valid. */
+  get officesComplete (): boolean {
+    return AreOfficesComplete(this.getOfficeAddresses)
   }
 
   /** Called when component is created. */

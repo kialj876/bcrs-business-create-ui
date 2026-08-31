@@ -26,5 +26,6 @@ export enum AmlRoles {
 
 export enum AmlTypes {
   LEAR = 'lear',
-  FOREIGN = 'foreign'
+  FOREIGN = 'foreign',
+  COLIN = 'colin'
 }

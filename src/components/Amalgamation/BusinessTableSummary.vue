@@ -30,7 +30,7 @@
           </td>
 
           <td class="business-address">
-            <template v-if="item.type === AmlTypes.LEAR">
+            <template v-if="isLearOrBcColin(item)">
               <BaseAddress
                 v-if="item.addresses"
                 :address="registeredOfficeMailingAddress(item)"
@@ -38,7 +38,7 @@
               <span v-else>Affiliate to view</span>
             </template>
 
-            <template v-if="item.type === AmlTypes.FOREIGN">
+            <template v-if="isForeignOrXproColin(item)">
               {{ jurisdiction(item) }}
             </template>
           </td>
@@ -60,6 +60,7 @@ import { useStore } from '@/store/store'
 import { AmlRoles, AmlTypes } from '@/enums'
 import { AddressIF, AmalgamatingBusinessIF } from '@/interfaces'
 import { BaseAddress } from '@bcrs-shared-components/base-address'
+import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 @Component({
   components: {
@@ -72,23 +73,53 @@ export default class BusinessTableSummary extends Vue {
 
   @Getter(useStore) getAmalgamatingBusinesses!: AmalgamatingBusinessIF[]
 
+  /** True for foreign businesses and for COLIN businesses that are extraprovincial (legal type A). */
+  isForeignOrXproColin (item: AmalgamatingBusinessIF): boolean {
+    return (
+      item?.type === AmlTypes.FOREIGN ||
+      (item?.type === AmlTypes.COLIN && item.legalType === CorpTypeCd.EXTRA_PRO_A)
+    )
+  }
+
+  /** True for LEAR businesses and for COLIN businesses that are not extraprovincial. */
+  isLearOrBcColin (item: AmalgamatingBusinessIF): boolean {
+    return (
+      item?.type === AmlTypes.LEAR ||
+      (item?.type === AmlTypes.COLIN && item.legalType !== CorpTypeCd.EXTRA_PRO_A)
+    )
+  }
+
   name (item: AmalgamatingBusinessIF): string {
-    if (item?.type === AmlTypes.LEAR) return item.name
+    if (item?.type === AmlTypes.LEAR || item?.type === AmlTypes.COLIN) return item.name
     if (item?.type === AmlTypes.FOREIGN) return item.legalName
     return '(Unknown)' // should never happen
   }
 
   email (item: AmalgamatingBusinessIF): string {
-    if (item?.type === AmlTypes.LEAR) return item.authInfo?.contacts?.[0]?.email || 'Email not available'
-    return null // should never happen
+    if (this.isLearOrBcColin(item)) {
+      return (item as any).authInfo?.contacts?.[0]?.email || 'Email not available'
+    }
+    return null // extrapro COLIN and foreign businesses have no contact email
   }
 
   registeredOfficeMailingAddress (item: AmalgamatingBusinessIF): AddressIF {
-    if (item?.type === AmlTypes.LEAR) return item.addresses?.registeredOffice?.mailingAddress
+    if (item?.type === AmlTypes.LEAR || item?.type === AmlTypes.COLIN) {
+      return item.addresses?.registeredOffice?.mailingAddress
+    }
     return null // should never happen
   }
 
   jurisdiction (item: AmalgamatingBusinessIF): string {
+    // extrapro COLIN rows carry the resolved home jurisdiction string from the COLIN snapshot
+    // ('BC' | province code | 'FD' | free text)
+    if (item?.type === AmlTypes.COLIN) {
+      const j = item.jurisdiction
+      if (!j) return '(Unknown)' // should never happen
+      if (j === 'FD') return 'Federal, Canada'
+      if (/^[A-Z]{2}$/.test(j)) return `${j}, Canada`
+      return j
+    }
+
     const fj = (item?.type === AmlTypes.FOREIGN) && item.foreignJurisdiction
     if (fj?.country) {
       const country = getName(fj.country)

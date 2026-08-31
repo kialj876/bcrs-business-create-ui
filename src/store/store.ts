@@ -79,7 +79,7 @@ import {
   ConfirmCompletionIF
 } from '@/interfaces'
 import { GetFeatureFlag } from '@/utils/feature-flag-utils'
-import { IsAuthorized } from '@/utils'
+import { AreOfficesComplete, AreOrgPersonsComplete, IsAuthorized, IsShareStructureComplete } from '@/utils'
 
 // It's possible to move getters / actions into seperate files:
 // https://github.com/vuejs/pinia/issues/802#issuecomment-1018780409
@@ -597,6 +597,11 @@ export const useStore = defineStore('store', {
       if (this.isEntityCoop) {
         return (!!this.getCooperativeType && this.getDefineCompanyStep.valid)
       }
+      // short-form amalgamations display the adopted office addresses read-only (which never
+      // report invalidity), so check their completeness here
+      if (this.isAmalgamationFilingHorizontal || this.isAmalgamationFilingVertical) {
+        return (this.getDefineCompanyStep.valid && AreOfficesComplete(this.getOfficeAddresses))
+      }
       return this.getDefineCompanyStep.valid
     },
 
@@ -617,7 +622,12 @@ export const useStore = defineStore('store', {
 
     /** Whether the Add People And Roles step is valid. */
     isAddPeopleAndRolesValid (): boolean {
-      return this.getAddPeopleAndRoleStep.valid
+      // also verify each org-person's completeness, since prepopulated and draft-restored
+      // people never pass through the add/edit form that normally enforces it
+      return (
+        this.getAddPeopleAndRoleStep.valid &&
+        AreOrgPersonsComplete(this.getAddPeopleAndRoleStep.orgPeople)
+      )
     },
 
     /** Whether the Create Share Structure step is valid. */
@@ -710,10 +720,11 @@ export const useStore = defineStore('store', {
 
     /** Whether all the amalgamation steps are valid. */
     isAmalgamationValid (): boolean {
+      // short-form amalgamations have no share structure step, but they are still validated
       const isCreateShareStructureValid = (
-        this.isAmalgamationFilingHorizontal ||
-        this.isAmalgamationFilingVertical ||
-        this.isCreateShareStructureValid
+        (this.isAmalgamationFilingHorizontal || this.isAmalgamationFilingVertical)
+          ? IsShareStructureComplete(this.getCreateShareStructureStep.shareClasses)
+          : this.isCreateShareStructureValid
       )
 
       const isCourtOrderValid = IsAuthorized(AuthorizedActions.COURT_ORDER_POA)

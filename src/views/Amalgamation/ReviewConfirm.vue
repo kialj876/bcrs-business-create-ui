@@ -37,6 +37,23 @@
           class="pa-4"
           :class="{ 'invalid-section': !getAmalgamatingBusinessesValid }"
         >
+          <div
+            v-if="!getAmalgamatingBusinessesValid"
+            class="amalgamating-businesses-invalid-message pb-3"
+          >
+            <v-icon color="error">
+              mdi-information-outline
+            </v-icon>
+            <span class="error-text mx-1">This step is unfinished.</span>
+            <router-link
+              id="router-link"
+              :to="{ path: isAmalgamationFilingRegular
+                ? `/${RouteNames.AMALG_REG_INFORMATION}`
+                : `/${RouteNames.AMALG_SHORT_INFORMATION}` }"
+            >
+              Return to this step to finish it
+            </router-link>
+          </div>
           <BusinessTableSummary />
         </div>
       </v-card>
@@ -295,7 +312,7 @@ import { Component, Vue } from 'vue-property-decorator'
 import { Action, Getter } from 'pinia-class'
 import { useStore } from '@/store/store'
 import { OTHER_CURRENCY } from '@/constants'
-import { AuthorizedActions } from '@/enums'
+import { AuthorizedActions, RouteNames } from '@/enums'
 import { ContactPointIF, CertifyIF, EffectiveDateTimeIF, ShareStructureIF,
   CourtOrderStepIF, DocumentDeliveryIF } from '@/interfaces'
 import CardHeader from '@/components/common/CardHeader.vue'
@@ -312,7 +329,7 @@ import SummaryDefineCompany from '@/components/common/SummaryDefineCompany.vue'
 import StaffPayment from '@/components/common/StaffPayment.vue'
 import { CorpTypeCd, GetCorpFullDescription } from '@bcrs-shared-components/corp-type-module'
 import ListResolutions from '@/components/common/ListResolutions.vue'
-import { IsAuthorized } from '@/utils'
+import { IsAuthorized, IsShareStructureComplete } from '@/utils'
 
 @Component({
   components: {
@@ -335,6 +352,7 @@ export default class AmalgamationReviewConfirm extends Vue {
   // for template
   readonly AuthorizedActions = AuthorizedActions
   readonly IsAuthorized = IsAuthorized
+  readonly RouteNames = RouteNames
 
   @Getter(useStore) getAmalgamatingBusinessesValid!: boolean
   @Getter(useStore) getAmalgamationCourtApprovalValid!: boolean
@@ -377,10 +395,12 @@ export default class AmalgamationReviewConfirm extends Vue {
     })
   }
 
-  /** Whether to show the List Share Class error summary -- only for regular amalgamations. */
+  /** Whether to show the List Share Class error summary. */
   get showErrorSummary (): boolean {
     if (this.isAmalgamationFilingRegular) return (!this.getCreateShareStructureStep.valid)
-    return false
+    // short-form amalgamations adopt their share structure from the holding/primary
+    // business -- check its completeness instead of the (nonexistent) step validity
+    return !IsShareStructureComplete(this.getCreateShareStructureStep.shareClasses)
   }
 
   /**

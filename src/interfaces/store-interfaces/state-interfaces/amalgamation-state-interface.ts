@@ -3,7 +3,7 @@ import { AmlStatuses, AmalgamationTypes, AmlRoles, AmlTypes } from '@/enums'
 import { CorpTypeCd } from '@bcrs-shared-components/corp-type-module'
 
 /** Interface for LEAR amalgamating businesses. */
-interface AmalgamatingLearIF {
+export interface AmalgamatingLearIF {
   type: AmlTypes.LEAR
 
   // properties in schema:
@@ -26,7 +26,7 @@ interface AmalgamatingLearIF {
 }
 
 /** Interface for foreign amalgamating businesses. */
-interface AmalgamatingForeignIF {
+export interface AmalgamatingForeignIF {
   type: AmlTypes.FOREIGN
 
   // properties in schema:
@@ -42,8 +42,29 @@ interface AmalgamatingForeignIF {
   status?: AmlStatuses
 }
 
+/** Interface for COLIN amalgamating businesses. */
+export interface AmalgamatingColinIF {
+  type: AmlTypes.COLIN
+
+  // properties in schema:
+  role: AmlRoles
+  identifier: string
+
+  // properties for UI only:
+  name?: string
+  legalType?: CorpTypeCd
+  authInfo?: AuthInformationIF
+  addresses?: RegisteredRecordsAddressesIF // from the snapshot; absence means not affiliated
+  jurisdiction?: string // extraprovincial (A) companies only - resolved home jurisdiction from the snapshot
+  status?: AmlStatuses // computed status (based on business rules)
+  isNotInGoodStanding?: boolean // true when snapshot goodStanding !== true
+  isFrozen?: boolean // whether business is frozen
+  isFutureEffective?: boolean // whether business has a future effective filing (in COLIN)
+  isHistorical?: boolean // whether business is historical
+}
+
 // type alias (union type)
-export type AmalgamatingBusinessIF = AmalgamatingLearIF | AmalgamatingForeignIF
+export type AmalgamatingBusinessIF = AmalgamatingLearIF | AmalgamatingForeignIF | AmalgamatingColinIF
 
 /** State interface for amalgamation-specific data. */
 export interface AmalgamationStateIF {

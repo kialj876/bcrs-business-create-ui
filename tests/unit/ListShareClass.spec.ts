@@ -1,7 +1,9 @@
 import Vuetify from 'vuetify'
 import { createPinia, setActivePinia } from 'pinia'
 import { createLocalVue, mount, shallowMount } from '@vue/test-utils'
+import { shallowWrapperFactory } from '../vitest-wrapper-factory'
 import ListShareClass from '@/components/common/ListShareClass.vue'
+import { AmalgamationTypes, FilingTypes } from '@/enums'
 import flushPromises from 'flush-promises'
 
 const vuetify = new Vuetify({})
@@ -349,5 +351,47 @@ describe('formatCurrency()', () => {
     expect(wrapper.vm.formatCurrency({ currency: 'OTHER', currencyAdditional: '' })).toBe('Other')
     expect(wrapper.vm.formatCurrency({ currency: 'OTHER', currencyAdditional: null })).toBe('Other')
     expect(wrapper.vm.formatCurrency({ currency: 'OTHER' })).toBe('Other')
+  })
+})
+
+describe('error summary messaging', () => {
+  it('shows the return link for a regular amalgamation', () => {
+    const wrapper = shallowWrapperFactory(ListShareClass,
+      { shareClasses: [], isSummary: true, showErrorSummary: true, isAmalgamationFiling: true },
+      {
+        amalgamation: { type: AmalgamationTypes.REGULAR },
+        tombstone: { filingType: FilingTypes.AMALGAMATION_APPLICATION }
+      }
+    )
+
+    const message = wrapper.find('.share-summary-invalid-message').text()
+    expect(message).toContain('This step is unfinished.')
+    expect(message).toContain('Return to this step to finish it')
+
+    wrapper.destroy()
+  })
+
+  it('directs short-form amalgamations to the holding/primary business', () => {
+    const wrapper = shallowWrapperFactory(ListShareClass,
+      { shareClasses: [], isSummary: true, showErrorSummary: true, isAmalgamationFiling: true },
+      {
+        amalgamation: { type: AmalgamationTypes.HORIZONTAL },
+        tombstone: { filingType: FilingTypes.AMALGAMATION_APPLICATION }
+      }
+    )
+
+    const message = wrapper.find('.share-summary-invalid-message').text()
+    expect(message).toContain('The adopted share structure is missing required information.')
+    expect(message).toContain('correct the share structure on the')
+    expect(message).toContain('primary')
+    expect(wrapper.find('#router-link').exists()).toBe(false)
+
+    // the two sentences are separate lines, aligned in a text column beside the icon
+    const lines = wrapper.findAll('.share-summary-invalid-message .error-text.d-block')
+    expect(lines.length).toBe(2)
+    expect(lines.at(0).text()).toContain('The adopted share structure is missing required information.')
+    expect(lines.at(1).text()).toContain('Save this draft application')
+
+    wrapper.destroy()
   })
 })

@@ -133,6 +133,61 @@ describe('Business Table - display', () => {
       },
       expectedJurisdiction: 'BC, Canada',
       role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'COLIN business',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'BC5555555',
+      name: 'My Colin Business',
+      addresses: {
+        registeredOffice: {
+          mailingAddress: {
+            streetAddress: '123 Colin St',
+            addressCity: 'Victoria',
+            addressCountry: 'CA',
+            postalCode: 'V8V 8V8'
+          }
+        }
+      },
+      legalType: CorpTypeCd.BC_COMPANY,
+      expectedBusinessType: 'BC Limited Company',
+      role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'COLIN business with no address',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'BC6666666',
+      name: 'My Unaffiliated Colin Business',
+      addresses: undefined,
+      legalType: CorpTypeCd.BC_COMPANY,
+      expectedBusinessType: 'BC Limited Company',
+      role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'extraprovincial COLIN business',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'A1234567',
+      name: 'My Extrapro Colin Business',
+      legalType: CorpTypeCd.EXTRA_PRO_A,
+      jurisdiction: 'ON',
+      expectedBusinessType: 'Extraprovincial Company',
+      expectedJurisdiction: 'ON, Canada',
+      role: AmlRoles.AMALGAMATING
+    },
+    {
+      label: 'extraprovincial COLIN business in Federal jurisdiction',
+      amalgamationType: AmalgamationTypes.REGULAR,
+      type: AmlTypes.COLIN,
+      identifier: 'A7654321',
+      name: 'My Federal Extrapro Colin Business',
+      legalType: CorpTypeCd.EXTRA_PRO_A,
+      jurisdiction: 'FD',
+      expectedBusinessType: 'Extraprovincial Company',
+      expectedJurisdiction: 'Federal, Canada',
+      role: AmlRoles.AMALGAMATING
     }
   ]
 
@@ -219,9 +274,62 @@ describe('Business Table - display', () => {
         expect(td.at(5).find('.v-btn').exists()).toBe(true)
       }
 
+      if ((business.type === AmlTypes.COLIN)) {
+        expect(td.at(1).text()).toContain(business.name)
+        expect(td.at(1).text()).toContain(business.identifier)
+        expect(td.at(2).text()).toBe(business.expectedBusinessType)
+
+        if (business.legalType === CorpTypeCd.EXTRA_PRO_A) {
+          // extrapro COLIN rows show the home jurisdiction
+          expect(td.at(3).text()).toBe(business.expectedJurisdiction)
+        } else if (business.addresses) {
+          expect(td.at(3).text()).toContain(business.addresses.registeredOffice.mailingAddress.streetAddress)
+          expect(td.at(3).text()).toContain(business.addresses.registeredOffice.mailingAddress.addressCity)
+          expect(td.at(3).text()).toContain('Canada')
+          expect(td.at(3).text()).toContain(business.addresses.registeredOffice.mailingAddress.postalCode)
+        } else {
+          expect(td.at(3).text()).toBe('Affiliate to view')
+        }
+
+        expect(td.at(4).text()).toBe('Amalgamating Business')
+        expect(td.at(0).exists()).toBe(true) // status
+        expect(td.at(5).find('.v-btn').exists()).toBe(true)
+      }
+
       wrapper.destroy()
     })
   }
+})
+
+describe('Business Table - more actions menu', () => {
+  it('allows mark-as-holding for COLIN businesses but not extrapro COLIN', () => {
+    const wrapper = wrapperFactory(
+      BusinessTable,
+      null,
+      {
+        amalgamation: {
+          type: AmalgamationTypes.VERTICAL,
+          amalgamatingBusinesses: []
+        },
+        tombstone: {
+          filingType: FilingTypes.AMALGAMATION_APPLICATION,
+          authorizedActions: []
+        }
+      }
+    )
+    const vm = wrapper.vm as any
+
+    expect(vm.showMoreActionsMenu({ type: AmlTypes.LEAR, role: AmlRoles.AMALGAMATING })).toBe(true)
+    expect(vm.showMoreActionsMenu({
+      type: AmlTypes.COLIN, legalType: CorpTypeCd.BC_COMPANY, role: AmlRoles.AMALGAMATING
+    })).toBe(true)
+    expect(vm.showMoreActionsMenu({
+      type: AmlTypes.COLIN, legalType: CorpTypeCd.EXTRA_PRO_A, role: AmlRoles.AMALGAMATING
+    })).toBe(false)
+    expect(vm.showMoreActionsMenu({ type: AmlTypes.FOREIGN, role: AmlRoles.AMALGAMATING })).toBe(false)
+
+    wrapper.destroy()
+  })
 })
 
 describe('Business Table - validity', () => {

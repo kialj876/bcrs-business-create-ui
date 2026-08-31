@@ -18,6 +18,7 @@ export interface PeopleAndRolesResourceIF {
   addIncorporator?: boolean
   addPerson?: boolean
   showDirectors?: boolean
+  readonlyDirectors?: boolean // directors are displayed but cannot be edited or removed
   addOrganization?: boolean
   addBusiness?: boolean
   rules: Array<RuleIF>

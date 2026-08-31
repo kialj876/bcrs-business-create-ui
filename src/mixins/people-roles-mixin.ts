@@ -181,6 +181,13 @@ export default class PeopleRolesMixin extends Vue {
     return (num > 0) // at least one
   }
 
+  /** Whether the Complete Director Info rule is valid. Always true if rule doesn't exist. */
+  get validDirectorInfo (): boolean {
+    const rule = this.getPeopleAndRolesResource.rules.find(r => r.id === RuleIds.COMPLETE_DIRECTOR_INFO)
+    if (!rule) return true
+    return rule.test(this.directors)
+  }
+
   /** Whether the Applicant Person rule is valid. Always true if rule doesn't exist. */
   get validApplicantPerson (): boolean {
     const rule = this.getPeopleAndRolesResource.rules.find(r => r.id === RuleIds.NUM_APPLICANT_PERSON)
@@ -338,6 +345,7 @@ export default class PeopleRolesMixin extends Vue {
       this.validNumDirectors &&
       this.validDirectorCountry &&
       this.validDirectorProvince &&
+      this.validDirectorInfo &&
       (this.validApplicantPerson || this.validApplicantOrg) &&
       this.validNumProprietors &&
       this.validNumPartners &&

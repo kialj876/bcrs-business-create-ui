@@ -81,3 +81,13 @@ export function GetFeatureFlag (name: string): any {
   // else return undefined if FF is not found
   return ldClient ? ldClient.variation(name) : defaultFlagSet[name]
 }
+
+/**
+ * A method that checks whether the specified feature is included in the
+ * "enable-new-feature" flag's list of released feature names.
+ * @param featureName the name of the feature (eg, "amalgamation-colin-businesses")
+ * @returns True if the feature is released
+ */
+export function IsFeatureReleased (featureName: string): boolean {
+  return (GetFeatureFlag('enable-new-feature')?.includes(featureName) === true)
+}
