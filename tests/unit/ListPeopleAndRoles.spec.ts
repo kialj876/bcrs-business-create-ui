@@ -601,6 +601,56 @@ describe('List People And Roles component - Short form amalgamation', () => {
     expect(rows.at(1).find('.edit-action').exists()).toBe(true)
   })
 
+  it('shows a red warning icon on an invalid read-only director row', () => {
+    // NB - full mount so the v-tooltip renders its activator slot (the icon)
+    wrapper = wrapperFactory(
+      ListPeopleAndRoles,
+      { readonlyDirectors: true },
+      {
+        // the director is missing their delivery address
+        // NB - showErrors is not set: the icon is always visible on invalid data
+        addPeopleAndRoleStep: {
+          orgPeople: [mockPersonList[0], { ...mockPersonList[1], deliveryAddress: null }]
+        }
+      }
+    )
+
+    const rows = wrapper.findAll('.people-roles-content')
+    expect(rows.at(1).find('.invalid-data-icon').exists()).toBe(true)
+    // the completing party row shows actions, not the icon
+    expect(rows.at(0).find('.invalid-data-icon').exists()).toBe(false)
+    expect(rows.at(0).find('.edit-action').exists()).toBe(true)
+    // the tooltip lists the specific issues
+    expect(wrapper.vm.directorIssues({ ...mockPersonList[1], deliveryAddress: null }))
+      .toEqual(['incomplete delivery address'])
+  })
+
+  it('does not show the warning icon when the adopted director is complete', () => {
+    wrapper = wrapperFactory(
+      ListPeopleAndRoles,
+      { readonlyDirectors: true },
+      { addPeopleAndRoleStep: { orgPeople: mockPersonList } }
+    )
+
+    expect(wrapper.find('.invalid-data-icon').exists()).toBe(false)
+  })
+
+  it('does not show the warning icon on editable rows (readonlyDirectors not set)', () => {
+    wrapper = wrapperFactory(
+      ListPeopleAndRoles,
+      null,
+      {
+        addPeopleAndRoleStep: {
+          orgPeople: [mockPersonList[0], { ...mockPersonList[1], deliveryAddress: null }]
+        }
+      }
+    )
+
+    const rows = wrapper.findAll('.people-roles-content')
+    expect(rows.at(1).find('.invalid-data-icon').exists()).toBe(false)
+    expect(rows.at(1).find('.edit-action').exists()).toBe(true)
+  })
+
   it('shows the error box when adopted director data is incomplete', () => {
     store.stateModel.amalgamation.type = AmalgamationTypes.VERTICAL
 

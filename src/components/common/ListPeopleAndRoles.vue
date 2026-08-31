@@ -168,9 +168,18 @@
               class="actions-column"
               :class="{'disabled':disabled}"
             >
-              <!-- no actions on read-only (adopted director) rows -->
+              <!-- read-only (adopted director) rows have no actions - flag invalid data instead -->
               <div
-                v-if="!isReadonlyRow(orgPerson)"
+                v-if="isReadonlyRow(orgPerson)"
+                class="text-center"
+              >
+                <InvalidDataIcon
+                  title="This director's information has the following issues:"
+                  :issues="directorIssues(orgPerson)"
+                />
+              </div>
+              <div
+                v-else
                 class="float-right"
               >
                 <span class="edit-action">
@@ -235,6 +244,8 @@ import { BaseAddress } from '@bcrs-shared-components/base-address'
 import { CommonMixin } from '@/mixins'
 import { OrgPersonIF, PeopleAndRoleIF } from '@/interfaces'
 import { PartyTypes, RoleTypes, RouteNames } from '@/enums'
+import { GetOrgPersonIssues } from '@/utils'
+import InvalidDataIcon from '@/components/common/InvalidDataIcon.vue'
 
 /**
  * This is a sub-component of PeopleAndRoles and
@@ -243,6 +254,7 @@ import { PartyTypes, RoleTypes, RouteNames } from '@/enums'
 @Component({
   components: {
     DeliveryAddress: BaseAddress,
+    InvalidDataIcon,
     MailingAddress: BaseAddress
   }
 })
@@ -317,6 +329,11 @@ export default class ListPeopleAndRoles extends Mixins(CommonMixin) {
   /** Returns true if specified org/person's row is read-only (an adopted director). */
   isReadonlyRow (orgPerson: OrgPersonIF): boolean {
     return (this.readonlyDirectors && this.isDirector(orgPerson))
+  }
+
+  /** Returns the org/person's data issues, for the warning tooltip. */
+  directorIssues (orgPerson: OrgPersonIF): string[] {
+    return GetOrgPersonIssues(orgPerson)
   }
 
   /** Returns true if specified org/person is a proprietor. */
@@ -455,5 +472,4 @@ export default class ListPeopleAndRoles extends Mixins(CommonMixin) {
   &.mdi-delete {
     margin-top: -2px;
   }
-}
-</style>
+}</style>

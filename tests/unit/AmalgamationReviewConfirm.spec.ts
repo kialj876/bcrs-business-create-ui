@@ -329,7 +329,7 @@ describe('Amalgamation Review Confirm — short-form error highlighting', () => 
     const wrapper = buildWrapper({
       createShareStructureStep: {
         valid: false,
-        shareClasses: [{ name: 'Class A', hasMaximumShares: false, hasParValue: false, series: [] }]
+        shareClasses: [{ name: 'Class A Shares', hasMaximumShares: false, hasParValue: false, series: [] }]
       }
     })
     expect(wrapper.vm.showErrorSummary).toBe(false)

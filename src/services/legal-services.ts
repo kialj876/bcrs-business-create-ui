@@ -319,24 +319,6 @@ export default class LegalServices {
       .then(response => {
         const data = response?.data
         if (!data?.business) throw new Error('Invalid API response')
-
-        // >>> TEMPORARY dev-test stub - corrupt directors/offices/shares so the
-        // >>> prepopulated-data validation can be exercised. REMOVE BEFORE COMMIT.
-        for (const party of (data.parties || [])) {
-          party.officer.firstName = ''
-          if (party.deliveryAddress) party.deliveryAddress.streetAddress = ''
-        }
-        const registeredDelivery = data.offices?.registeredOffice?.deliveryAddress
-        if (registeredDelivery) {
-          registeredDelivery.postalCode = 'V0N1G0'
-          registeredDelivery.country = 'CA'
-          registeredDelivery.region = 'BC'
-        }
-        for (const shareClass of (data.shareClasses || [])) {
-          shareClass.name = ''
-        }
-        // <<< END TEMPORARY
-
         return data
       })
   }

@@ -662,6 +662,61 @@ describe('Office Addresses component - Summary UI', () => {
   })
 })
 
+describe('Office Addresses component - adopted data warning icons', () => {
+  let wrapper: any
+
+  const VALID_BC_ADDRESS = {
+    streetAddress: '123 Main St',
+    streetAddressAdditional: '',
+    addressCity: 'Victoria',
+    addressRegion: 'BC',
+    addressCountry: 'CA',
+    postalCode: 'V8V 8V8',
+    deliveryInstructions: ''
+  }
+  const validOffice = {
+    mailingAddress: { ...VALID_BC_ADDRESS },
+    deliveryAddress: { ...VALID_BC_ADDRESS }
+  }
+  const invalidOffice = {
+    mailingAddress: { ...VALID_BC_ADDRESS, streetAddress: '' },
+    deliveryAddress: { ...VALID_BC_ADDRESS }
+  }
+
+  // NB - full mount so the v-tooltip renders its activator slot (the icon)
+  const buildWrapper = (inputAddresses: any, showAddressIssues = true) => mount(OfficeAddresses, {
+    propsData: { inputAddresses, isEditing: false, showAddressIssues },
+    localVue: createLocalVue(),
+    vuetify
+  })
+
+  beforeAll(() => {
+    store.stateModel.entityType = CorpTypeCd.BENEFIT_COMPANY
+  })
+
+  afterEach(() => {
+    wrapper.destroy()
+  })
+
+  it('flags only the office with invalid adopted addresses', () => {
+    wrapper = buildWrapper({ registeredOffice: invalidOffice, recordsOffice: validOffice })
+    expect(wrapper.find('#summary-registered-address .invalid-data-icon').exists()).toBe(true)
+    expect(wrapper.find('#summary-records-address .invalid-data-icon').exists()).toBe(false)
+    // the tooltip lists the specific issues
+    expect(wrapper.vm.registeredOfficeIssues).toEqual(['incomplete mailing address'])
+  })
+
+  it('shows no icons when the adopted addresses are valid', () => {
+    wrapper = buildWrapper({ registeredOffice: validOffice, recordsOffice: validOffice })
+    expect(wrapper.find('.invalid-data-icon').exists()).toBe(false)
+  })
+
+  it('shows no icons when the prop is not set (other filings)', () => {
+    wrapper = buildWrapper({ registeredOffice: invalidOffice, recordsOffice: invalidOffice }, false)
+    expect(wrapper.find('.invalid-data-icon').exists()).toBe(false)
+  })
+})
+
 describe('Office Address schema validation', () => {
   let wrapper: any
 

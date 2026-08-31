@@ -545,7 +545,8 @@ describe('Share Structure component', () => {
     const shareClass = createShareStructure(null, 1, 'Class', 'Class A', true, 100, true, 0.50, 'CAD', true)
     const wrapper: Wrapper<ShareStructure> = createComponent(shareClass, 0, '', 0, [])
     const items = wrapper.find('.v-select').props('items')
-    expect(items.length).toBe(157)
+    // 152 currency codes + 1 divider (retired ISO 4217 codes were removed - the API rejects them)
+    expect(items.length).toBe(153)
     expect(wrapper.vm.$data.shareStructure.currency).toBe('CAD')
     expect(wrapper.find('.v-select').text()).toContain('Canadian dollar (CAD)')
     shareClass.currency = 'USD'

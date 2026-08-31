@@ -262,6 +262,14 @@
             :editing="false"
           />
         </v-col>
+
+        <!-- invalid adopted data warning -->
+        <v-col v-if="showAddressIssues">
+          <InvalidDataIcon
+            title="This office's addresses have the following issues:"
+            :issues="registeredOfficeIssues"
+          />
+        </v-col>
       </v-row>
 
       <v-row
@@ -318,6 +326,14 @@
             :editing="false"
           />
         </v-col>
+
+        <!-- invalid adopted data warning -->
+        <v-col v-if="showAddressIssues">
+          <InvalidDataIcon
+            title="This office's addresses have the following issues:"
+            :issues="recordsOfficeIssues"
+          />
+        </v-col>
       </v-row>
     </template>
   </div>
@@ -328,6 +344,8 @@ import { Component, Emit, Mixins, Prop, Watch } from 'vue-property-decorator'
 import { Getter } from 'pinia-class'
 import { useStore } from '@/store/store'
 import { OfficeAddressSchema } from '@/schemas'
+import { GetOfficeIssues } from '@/utils'
+import InvalidDataIcon from '@/components/common/InvalidDataIcon.vue'
 import { BaseAddress } from '@bcrs-shared-components/base-address'
 import { AddressIF, EmptyAddress, RegisteredRecordsAddressesIF } from '@/interfaces'
 import { CommonMixin } from '@/mixins'
@@ -335,6 +353,7 @@ import { CommonMixin } from '@/mixins'
 @Component({
   components: {
     DeliveryAddress: BaseAddress,
+    InvalidDataIcon,
     MailingAddress: BaseAddress
   }
 })
@@ -357,6 +376,9 @@ export default class OfficeAddresses extends Mixins(CommonMixin) {
 
   /** Whether to show the editable forms for the addresses (true) or just the static display addresses (false). */
   @Prop({ default: true }) readonly isEditing!: boolean
+
+  /** Whether to flag invalid addresses with a warning icon in the static display (adopted data). */
+  @Prop({ default: false }) readonly showAddressIssues!: boolean
 
   @Prop({ default: false }) readonly showErrors!: boolean
 
@@ -462,6 +484,16 @@ export default class OfficeAddresses extends Mixins(CommonMixin) {
         }
       }
     }
+  }
+
+  /** The data issues with the registered office addresses (empty if complete). */
+  get registeredOfficeIssues (): string[] {
+    return GetOfficeIssues({ mailingAddress: this.mailingAddress, deliveryAddress: this.deliveryAddress })
+  }
+
+  /** The data issues with the records office addresses (empty if complete). */
+  get recordsOfficeIssues (): string[] {
+    return GetOfficeIssues({ mailingAddress: this.recMailingAddress, deliveryAddress: this.recDeliveryAddress })
   }
 
   /** Whether the address form is valid. */

@@ -299,7 +299,7 @@ describe('People And Roles component - Amalgamation Short form', () => {
   it('shows an error icon for incomplete director info when errors are shown', () => {
     store.stateModel.showErrors = true
     store.stateModel.addPeopleAndRoleStep.orgPeople = [
-      { ...completeDirector, officer: { ...completeDirector.officer, firstName: '' } }
+      { ...completeDirector, officer: { ...completeDirector.officer, lastName: '' } }
     ]
     const wrapper = wrapperFactory()
     expect(wrapper.find('.dir-info-valid').exists()).toBe(false)

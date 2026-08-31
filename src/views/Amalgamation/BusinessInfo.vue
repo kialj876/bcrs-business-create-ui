@@ -48,6 +48,7 @@
             <OfficeAddresses
               :inputAddresses="getOfficeAddresses"
               :isEditing="false"
+              :showAddressIssues="true"
               @valid="onOfficeAddressesValid($event)"
             />
           </article>
